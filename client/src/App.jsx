@@ -97,6 +97,12 @@ export default function App() {
               <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">Answer</span>
               <span className="text-xs text-gray-400">{result.retrieval_method} · {result.records_retrieved} records</span>
             </div>
+            {result.question && (
+              <p className="text-sm text-gray-500 mb-3 pb-3 border-b border-gray-100">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-2">Question</span>
+                {result.question}
+              </p>
+            )}
             <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{result.answer}</p>
             {result.citations?.length > 0 && (
               <div className="mt-4 pt-3 border-t border-gray-100">
@@ -121,7 +127,7 @@ export default function App() {
             <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">History</p>
             <div className="flex flex-col gap-2">
               {history.map((h, i) => (
-                <button key={i} onClick={() => setResult(h.result)} className="text-left bg-white border border-gray-200 rounded-lg px-3 py-2.5 hover:border-violet-200 transition-colors">
+                <button key={i} onClick={() => setResult({ ...h.result, question: h.question })} className="text-left bg-white border border-gray-200 rounded-lg px-3 py-2.5 hover:border-violet-200 transition-colors">
                   <p className="text-sm text-gray-700 truncate">{h.question}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{h.method}</p>
                 </button>

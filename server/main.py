@@ -60,6 +60,7 @@ def ask(req: AskRequest):
     })
     return {
         "id": result_id,
+        "question": req.question,
         "answer": answer,
         "citations": citations,
         "retrieval_method": req.retrieval_method,
