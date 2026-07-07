@@ -1,5 +1,6 @@
 from bedrock import invoke_claude
 import json
+import re
 
 SYSTEM_PROMPT = """You are a payer data analyst assistant for a pharmaceutical market access consulting firm.
 
@@ -7,11 +8,24 @@ Answer questions about payer access data using ONLY the records provided. Never 
 
 Rules:
 - Only use information from the provided records.
-- Cite every claim with its source (organization, regimen, indication, line, book).
-- Use accessData (access label, score, caption), tierData, policyLinkData, and additionalCriteriaData when relevant.
 - If records are empty or insufficient, say so clearly. Do not guess.
-- If data is partial, say so explicitly.
-- Be concise. Lead with the answer, then support with data."""
+
+Format (strict):
+- One to two sentences only. No markdown, no headers, no bullets, no bold, no horizontal rules.
+- State the access level and score directly. Nothing else.
+- End with source in parentheses.
+- Example: Brukinsa has a Step Edit at UnitedHealth Group for CLL under Medicare with a score of 21. (Source: UnitedHealth Group, Brukinsa, CLL, Medicare)"""
+
+
+def clean_answer(text: str) -> str:
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"^---+\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^>\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^[-*]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str]]:
@@ -37,14 +51,14 @@ def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str
             context_parts.append(f"{label}\n{chunk.get('text', '')}")
 
     context = "\n".join(context_parts)
-    prompt = f"""Answer this question using only the records below. Cite your sources.
+    prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the access level and score directly.
 
 Question: {question}
 
 Records:
 {context}"""
 
-    answer = invoke_claude(prompt, system=SYSTEM_PROMPT)
+    answer = clean_answer(invoke_claude(prompt, system=SYSTEM_PROMPT, max_tokens=150))
 
     citations = []
     for r in payer_records:

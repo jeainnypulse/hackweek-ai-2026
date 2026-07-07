@@ -56,12 +56,12 @@ from functools import lru_cache
 def get_bedrock_client():
     return boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "us-east-1"))
 
-def invoke_claude(prompt: str, system: str = "") -> str:
+def invoke_claude(prompt: str, system: str = "", max_tokens: int = 1024) -> str:
     client = get_bedrock_client()
     model_id = os.getenv("BEDROCK_CLAUDE_MODEL", "anthropic.claude-sonnet-4-6")
     body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1024,
+        "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
     if system:
@@ -93,6 +93,7 @@ EOF
 cat > server/synthesis.py << 'EOF'
 from bedrock import invoke_claude
 import json
+import re
 
 SYSTEM_PROMPT = """You are a payer data analyst assistant for a pharmaceutical market access consulting firm.
 
@@ -100,11 +101,25 @@ Answer questions about payer access data using ONLY the records provided. Never 
 
 Rules:
 - Only use information from the provided records.
-- Cite every claim with its source (organization, regimen, indication, line, book).
 - Use accessData (access label, score, caption), tierData, policyLinkData, and additionalCriteriaData when relevant.
 - If records are empty or insufficient, say so clearly. Do not guess.
-- If data is partial, say so explicitly.
-- Be concise. Lead with the answer, then support with data."""
+
+Format (strict):
+- Plain text only. No markdown, no headers, no bold, no bullets, no horizontal rules, no section labels.
+- Keep the answer to 2-4 short sentences maximum.
+- Lead with the direct answer: access level, score if available, and tier if relevant.
+- Mention only the most important restriction or criteria in one phrase.
+- End with a brief source note in parentheses, e.g. (Source: Aetna, Brukinsa, CLL, Medicare)."""
+
+def clean_answer(text: str) -> str:
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"^---+\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^>\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^[-*]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str]]:
     if not records:
@@ -129,14 +144,14 @@ def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str
             context_parts.append(f"{label}\n{chunk.get('text', '')}")
 
     context = "\n".join(context_parts)
-    prompt = f"""Answer this question using only the records below. Cite your sources.
+    prompt = f"""Answer this question in 2-4 plain-text sentences. No markdown.
 
 Question: {question}
 
 Records:
 {context}"""
 
-    answer = invoke_claude(prompt, system=SYSTEM_PROMPT)
+    answer = clean_answer(invoke_claude(prompt, system=SYSTEM_PROMPT, max_tokens=300))
 
     citations = []
     for r in payer_records:
@@ -181,6 +196,7 @@ def exact_match_retrieval(question: str) -> list[dict]:
     slots = extract_slots(question)
     print(f"[exact_match] slots: {slots}")
     query = {k: v for k, v in slots.items() if v is not None}
+    print(f"[exact_match] query: {json.dumps(query)}")
     if not query:
         return []
     db = get_db()
@@ -562,6 +578,18 @@ EOF
 cat > client/src/App.jsx << 'EOF'
 import { useState } from 'react'
 
+function stripMarkdown(text) {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/^---+\s*$/gm, '')
+    .replace(/^>\s*/gm, '')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const RETRIEVAL_METHODS = [
   { value: 'exact_match', label: 'Exact Match' },
   { value: 'vector_search', label: 'Vector Search' },
@@ -659,7 +687,7 @@ export default function App() {
               <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">Answer</span>
               <span className="text-xs text-gray-400">{result.retrieval_method} · {result.records_retrieved} records</span>
             </div>
-            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{result.answer}</p>
+            <p className="text-sm text-gray-800 leading-relaxed">{stripMarkdown(result.answer)}</p>
             {result.citations?.length > 0 && (
               <div className="mt-4 pt-3 border-t border-gray-100">
                 <p className="text-xs text-gray-400 mb-2">Sources</p>
