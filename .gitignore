@@ -1,0 +1,14 @@
+# Python
+server/venv/
+server/__pycache__/
+server/**/__pycache__/
+*.pyc
+
+# Environment variables — never commit this
+server/.env
+
+# Node
+client/node_modules/
+
+# OS
+.DS_Store
