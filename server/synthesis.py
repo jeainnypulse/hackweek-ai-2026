@@ -3,22 +3,23 @@ import json
 
 SYSTEM_PROMPT = """You are a payer data analyst assistant for a pharmaceutical market access consulting firm.
 
-Answer questions about payer Quality of Access (QoA) data using ONLY the records provided. Never make up data.
+Answer questions about payer access data using ONLY the records provided. Never make up data.
 
 Rules:
 - Only use information from the provided records.
-- Cite every claim with its source (payer, drug, indication, report period).
+- Cite every claim with its source (organization, regimen, indication, line, book).
+- Use accessData (access label, score, caption), tierData, policyLinkData, and additionalCriteriaData when relevant.
 - If records are empty or insufficient, say so clearly. Do not guess.
 - If data is partial, say so explicitly.
-- Be concise. Lead with the answer, then support with data.
-- Format lives percentages clearly (e.g. 14% of commercial lives)."""
+- Be concise. Lead with the answer, then support with data."""
+
 
 def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str]]:
     if not records:
         return (
             "No matching records were found for this question. "
-            "Please check the drug name, indication, and book of business and try again.",
-            []
+            "Please check the regimen name, indication, and book of business and try again.",
+            [],
         )
 
     payer_records = [r for r in records if "chunk_type" not in r]
@@ -47,10 +48,19 @@ Records:
 
     citations = []
     for r in payer_records:
-        parts = [p for p in [
-            r.get("payer"), r.get("drug"), r.get("indication"),
-            r.get("book_of_business"), r.get("report_period"),
-        ] if p]
+        access = r.get("accessData") or {}
+        parts = [
+            p
+            for p in [
+                r.get("organization"),
+                r.get("regimen"),
+                r.get("indication"),
+                r.get("line"),
+                r.get("book"),
+                access.get("access"),
+            ]
+            if p
+        ]
         if parts:
             citations.append(" · ".join(str(p) for p in parts))
 

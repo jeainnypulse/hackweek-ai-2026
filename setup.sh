@@ -96,21 +96,21 @@ import json
 
 SYSTEM_PROMPT = """You are a payer data analyst assistant for a pharmaceutical market access consulting firm.
 
-Answer questions about payer Quality of Access (QoA) data using ONLY the records provided. Never make up data.
+Answer questions about payer access data using ONLY the records provided. Never make up data.
 
 Rules:
 - Only use information from the provided records.
-- Cite every claim with its source (payer, drug, indication, report period).
+- Cite every claim with its source (organization, regimen, indication, line, book).
+- Use accessData (access label, score, caption), tierData, policyLinkData, and additionalCriteriaData when relevant.
 - If records are empty or insufficient, say so clearly. Do not guess.
 - If data is partial, say so explicitly.
-- Be concise. Lead with the answer, then support with data.
-- Format lives percentages clearly (e.g. 14% of commercial lives)."""
+- Be concise. Lead with the answer, then support with data."""
 
 def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str]]:
     if not records:
         return (
             "No matching records were found for this question. "
-            "Please check the drug name, indication, and book of business and try again.",
+            "Please check the regimen name, indication, and book of business and try again.",
             []
         )
 
@@ -140,9 +140,10 @@ Records:
 
     citations = []
     for r in payer_records:
+        access = r.get("accessData") or {}
         parts = [p for p in [
-            r.get("payer"), r.get("drug"), r.get("indication"),
-            r.get("book_of_business"), r.get("report_period"),
+            r.get("organization"), r.get("regimen"), r.get("indication"),
+            r.get("line"), r.get("book"), access.get("access"),
         ] if p]
         if parts:
             citations.append(" · ".join(str(p) for p in parts))
@@ -158,24 +159,16 @@ import json
 SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer question. Return ONLY valid JSON with no explanation or markdown.
 
 Slots to extract:
-- drug: brand name (Calquence, Brukinsa, Imbruvica, Imfinzi). Return null if not specified.
-- indication: line of therapy + disease (e.g. 1L CLL, 2L CLL, Stage III NSCLC). Return null if not specified.
-- book_of_business: "commercial" or "medicare". Default to "commercial" if not mentioned.
-- payer: specific payer name if mentioned, otherwise null.
-
-Drug mappings:
-- cal, calquence, acalabrutinib -> Calquence
-- brukinsa, zanubrutinib -> Brukinsa
-- imbruvica, ibrutinib -> Imbruvica
-- imfinzi, durvalumab -> Imfinzi
-
-Indication mappings:
-- first line CLL, 1L CLL -> 1L CLL
-- second line CLL, 2L CLL -> 2L CLL
-- stage 3 NSCLC, stage III NSCLC -> Stage III NSCLC
+- regimen: brand name (e.g. Spinraza, Calquence). Return null if not specified.
+- indication: disease/indication only (e.g. "Spinal Muscular Atrophy", "CLL"). Do NOT include line of therapy.
+- line: line of therapy (e.g. "1L", "2L"). Return null if not specified.
+- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid"). Return null if not specified.
+- organization: specific payer name (e.g. "Health Net", "Aetna"). Return null if not specified.
+- coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
+- population: patient population/subtype if mentioned. Return null if not specified.
 
 Return format:
-{"drug": "Calquence", "indication": "1L CLL", "book_of_business": "commercial", "payer": null}
+{"regimen": "Spinraza", "indication": "Spinal Muscular Atrophy", "line": "1L", "book": "Managed Medicaid", "organization": "Health Net", "coverage": "Medical", "population": null}
 
 Question: """
 
@@ -217,13 +210,19 @@ def vector_search_retrieval(question: str, top_k: int = 10) -> list[dict]:
             "$project": {
                 "_id": 0,
                 "score": {"$meta": "vectorSearchScore"},
-                "drug": 1,
+                "organization": 1,
+                "organizationTiny": 1,
+                "regimen": 1,
                 "indication": 1,
-                "book_of_business": 1,
-                "payer": 1,
-                "qoa_segment": 1,
-                "lives_pct": 1,
-                "report_period": 1,
+                "line": 1,
+                "book": 1,
+                "coverage": 1,
+                "population": 1,
+                "accessData": 1,
+                "tierData": 1,
+                "policyLinkData": 1,
+                "additionalCriteriaData": 1,
+                "timestamp": 1,
             }
         }
     ]
@@ -281,13 +280,22 @@ import time
 
 def flatten_record(record: dict) -> str:
     parts = []
-    if record.get("payer"):            parts.append(record["payer"])
-    if record.get("drug"):             parts.append(record["drug"])
-    if record.get("indication"):       parts.append(f"indication {record['indication']}")
-    if record.get("book_of_business"): parts.append(record["book_of_business"])
-    if record.get("qoa_segment"):      parts.append(f"QoA {record['qoa_segment']}")
-    if record.get("lives_pct"):        parts.append(f"{record['lives_pct']}% of lives")
-    if record.get("report_period"):    parts.append(f"report period {record['report_period']}")
+    if record.get("organization"):     parts.append(record["organization"])
+    if record.get("regimen"):          parts.append(record["regimen"])
+    if record.get("indication"):       parts.append(record["indication"])
+    if record.get("line"):             parts.append(record["line"])
+    if record.get("book"):             parts.append(record["book"])
+    if record.get("coverage"):         parts.append(record["coverage"])
+    if record.get("population"):       parts.append(record["population"])
+    access = record.get("accessData") or {}
+    if access.get("access"):           parts.append(f"access {access['access']}")
+    if access.get("score") is not None: parts.append(f"score {access['score']}")
+    tier = record.get("tierData") or {}
+    if tier.get("tierRating"):         parts.append(tier["tierRating"])
+    for item in record.get("additionalCriteriaData") or []:
+        if item.get("criteria"):       parts.append(item["criteria"])
+    caption = (access.get("caption") or {}).get("General") or (access.get("caption") or {}).get("ALL")
+    if caption:                        parts.append(caption)
     return " ".join(parts)
 
 def main():

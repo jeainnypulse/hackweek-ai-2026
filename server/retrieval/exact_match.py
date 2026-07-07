@@ -5,31 +5,25 @@ import json
 SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer question. Return ONLY valid JSON with no explanation or markdown.
 
 Slots to extract:
-- drug: brand name (Calquence, Brukinsa, Imbruvica, Imfinzi). Return null if not specified.
-- indication: line of therapy + disease (e.g. 1L CLL, 2L CLL, Stage III NSCLC). Return null if not specified.
-- book_of_business: "commercial" or "medicare". Default to "commercial" if not mentioned.
-- payer: specific payer name if mentioned, otherwise null.
-
-Drug mappings:
-- cal, calquence, acalabrutinib -> Calquence
-- brukinsa, zanubrutinib -> Brukinsa
-- imbruvica, ibrutinib -> Imbruvica
-- imfinzi, durvalumab -> Imfinzi
-
-Indication mappings:
-- first line CLL, 1L CLL -> 1L CLL
-- second line CLL, 2L CLL -> 2L CLL
-- stage 3 NSCLC, stage III NSCLC -> Stage III NSCLC
+- regimen: brand name (e.g. Spinraza, Calquence). Return null if not specified.
+- indication: disease/indication only (e.g. "Spinal Muscular Atrophy", "CLL"). Do NOT include line of therapy.
+- line: line of therapy (e.g. "1L", "2L"). Return null if not specified.
+- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid"). Return null if not specified.
+- organization: specific payer name (e.g. "Health Net", "Aetna"). Return null if not specified.
+- coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
+- population: patient population/subtype if mentioned. Return null if not specified.
 
 Return format:
-{"drug": "Calquence", "indication": "1L CLL", "book_of_business": "commercial", "payer": null}
+{"regimen": "Spinraza", "indication": "Spinal Muscular Atrophy", "line": "1L", "book": "Managed Medicaid", "organization": "Health Net", "coverage": "Medical", "population": null}
 
 Question: """
+
 
 def extract_slots(question: str) -> dict:
     response = invoke_claude(SLOT_EXTRACTION_PROMPT + question)
     clean = response.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
+
 
 def exact_match_retrieval(question: str) -> list[dict]:
     slots = extract_slots(question)
