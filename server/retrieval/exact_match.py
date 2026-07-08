@@ -1,3 +1,5 @@
+from typing import Optional
+
 from bedrock import invoke_claude
 from db import get_db
 import json
@@ -25,8 +27,9 @@ def extract_slots(question: str) -> dict:
     return json.loads(clean)
 
 
-def exact_match_retrieval(question: str) -> list[dict]:
-    slots = extract_slots(question)
+def exact_match_retrieval(question: str, slots: Optional[dict] = None) -> list[dict]:
+    if slots is None:
+        slots = extract_slots(question)
     print(f"[exact_match] slots: {slots}")
     query = {k: v for k, v in slots.items() if v is not None}
     if not query:

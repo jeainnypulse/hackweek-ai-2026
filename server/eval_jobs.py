@@ -1,11 +1,13 @@
 import csv
 import io
+import json
 import threading
 import time
 import uuid
 from typing import Optional
 
-from eval import compare_answers
+from eval import compare_eval_result
+from retrieval.exact_match import extract_slots
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
@@ -15,20 +17,28 @@ def results_to_csv(results: list[dict]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "id", "type", "question", "expected_answer", "citation",
-        "actual_answer", "match", "score", "records_retrieved", "error",
+        "id", "type", "question", "expected_access", "expected_slots", "citation",
+        "actual_answer", "actual_slots", "match", "access_match", "access_score",
+        "slots_match", "slots_score", "records_retrieved", "error",
     ])
     for row in results:
         comparison = row.get("comparison") or {}
+        access = comparison.get("access") or {}
+        slots = comparison.get("slots") or {}
         writer.writerow([
             row.get("id", ""),
             row.get("type", ""),
             row.get("question", ""),
-            row.get("expected_answer", ""),
+            row.get("expected_access", ""),
+            json.dumps(row.get("expected_slots")) if row.get("expected_slots") else "",
             row.get("citation", ""),
             row.get("actual_answer", ""),
+            json.dumps(comparison.get("actual_slots")) if comparison.get("actual_slots") else "",
             comparison.get("match"),
-            comparison.get("score"),
+            access.get("match"),
+            access.get("score"),
+            slots.get("match"),
+            slots.get("score"),
             row.get("records_retrieved", 0),
             row.get("error") or "",
         ])
@@ -71,19 +81,30 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                     **item,
                     "actual_answer": "",
                     "records_retrieved": 0,
-                    "comparison": {"score": None, "match": None, "matched_terms": []},
+                    "comparison": {
+                        "match": None,
+                        "access": {"score": None, "match": None, "matched_terms": []},
+                        "slots": {"score": None, "match": None, "matched_fields": [], "mismatched_fields": []},
+                        "actual_slots": None,
+                    },
                     "error": f"Unknown retrieval method: {method}",
                 }
             else:
                 try:
-                    records = handler(item["question"])
+                    actual_slots = extract_slots(item["question"])
+                    if method == "exact_match":
+                        records = handler(item["question"], slots=actual_slots)
+                    else:
+                        records = handler(item["question"])
                     from synthesis import synthesize_answer
 
                     actual_answer, _citations = synthesize_answer(item["question"], records)
-                    comparison = compare_answers(item.get("expected_answer", ""), actual_answer)
+                    comparison = compare_eval_result(item, actual_answer, actual_slots)
                     if comparison["match"] is True:
                         passed += 1
-                    if comparison["score"] is not None:
+                    access = comparison.get("access") or {}
+                    slots = comparison.get("slots") or {}
+                    if access.get("score") is not None or slots.get("score") is not None:
                         scored += 1
                     row = {
                         **item,
@@ -97,7 +118,12 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                         **item,
                         "actual_answer": "",
                         "records_retrieved": 0,
-                        "comparison": {"score": None, "match": False, "matched_terms": []},
+                        "comparison": {
+                            "match": False,
+                            "access": {"score": None, "match": False, "matched_terms": []},
+                            "slots": {"score": None, "match": False, "matched_fields": [], "mismatched_fields": []},
+                            "actual_slots": None,
+                        },
                         "error": str(exc),
                     }
 
