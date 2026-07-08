@@ -66,6 +66,13 @@ def health_bedrock():
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
+@app.get("/api/health/vector-search")
+def health_vector_search():
+    from vector_index import get_vector_search_status
+
+    status = get_vector_search_status()
+    return status
+
 @app.post("/api/ask")
 def ask(req: AskRequest):
     if not req.question.strip():

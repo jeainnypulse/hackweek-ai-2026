@@ -1,6 +1,7 @@
 from retrieval.exact_match import exact_match_retrieval
 from bedrock import get_embedding
 from db import get_db
+from vector_index import EMBEDDING_PATH, INDEX_NAME
 
 def combined_retrieval(question: str) -> list[dict]:
     payer_records = exact_match_retrieval(question)
@@ -14,8 +15,8 @@ def retrieve_doc_chunks(question: str, top_k: int = 5) -> list[dict]:
     pipeline = [
         {
             "$vectorSearch": {
-                "index": "doc_chunks_vector_index",
-                "path": "embedding",
+                "index": INDEX_NAME,
+                "path": EMBEDDING_PATH,
                 "queryVector": embedding,
                 "numCandidates": top_k * 10,
                 "limit": top_k,
