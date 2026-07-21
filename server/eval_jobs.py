@@ -8,6 +8,9 @@ from typing import Optional
 
 from eval import compare_eval_result
 from retrieval.exact_match import extract_slots
+from retrieval.exact_match_finetuned import extract_slots_finetuned
+from retrieval.exact_match_sp_1 import extract_slots as extract_slots_sp_1
+
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
@@ -16,32 +19,56 @@ _jobs_lock = threading.Lock()
 def results_to_csv(results: list[dict]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "id", "type", "question", "expected_access", "expected_slots", "citation",
-        "actual_answer", "actual_slots", "match", "access_match", "access_score",
-        "slots_match", "slots_score", "records_retrieved", "error",
-    ])
+    writer.writerow(
+        [
+            "id",
+            "type",
+            "question",
+            "expected_access",
+            "expected_slots",
+            "citation",
+            "actual_answer",
+            "actual_slots",
+            "match",
+            "access_match",
+            "access_score",
+            "slots_match",
+            "slots_score",
+            "records_retrieved",
+            "error",
+        ]
+    )
     for row in results:
         comparison = row.get("comparison") or {}
         access = comparison.get("access") or {}
         slots = comparison.get("slots") or {}
-        writer.writerow([
-            row.get("id", ""),
-            row.get("type", ""),
-            row.get("question", ""),
-            row.get("expected_access", ""),
-            json.dumps(row.get("expected_slots")) if row.get("expected_slots") else "",
-            row.get("citation", ""),
-            row.get("actual_answer", ""),
-            json.dumps(comparison.get("actual_slots")) if comparison.get("actual_slots") else "",
-            comparison.get("match"),
-            access.get("match"),
-            access.get("score"),
-            slots.get("match"),
-            slots.get("score"),
-            row.get("records_retrieved", 0),
-            row.get("error") or "",
-        ])
+        writer.writerow(
+            [
+                row.get("id", ""),
+                row.get("type", ""),
+                row.get("question", ""),
+                row.get("expected_access", ""),
+                (
+                    json.dumps(row.get("expected_slots"))
+                    if row.get("expected_slots")
+                    else ""
+                ),
+                row.get("citation", ""),
+                row.get("actual_answer", ""),
+                (
+                    json.dumps(comparison.get("actual_slots"))
+                    if comparison.get("actual_slots")
+                    else ""
+                ),
+                comparison.get("match"),
+                access.get("match"),
+                access.get("score"),
+                slots.get("match"),
+                slots.get("score"),
+                row.get("records_retrieved", 0),
+                row.get("error") or "",
+            ]
+        )
     return output.getvalue()
 
 
@@ -84,27 +111,44 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                     "comparison": {
                         "match": None,
                         "access": {"score": None, "match": None, "matched_terms": []},
-                        "slots": {"score": None, "match": None, "matched_fields": [], "mismatched_fields": []},
+                        "slots": {
+                            "score": None,
+                            "match": None,
+                            "matched_fields": [],
+                            "mismatched_fields": [],
+                        },
                         "actual_slots": None,
                     },
                     "error": f"Unknown retrieval method: {method}",
                 }
             else:
                 try:
-                    actual_slots = extract_slots(item["question"])
-                    if method == "exact_match":
+                    if method == "exact_match_finetuned":
+                        actual_slots = extract_slots_finetuned(item["question"])
+                        records = handler(item["question"], slots=actual_slots)
+                    elif method == "exact_match":
+                        actual_slots = extract_slots(item["question"])
+                        records = handler(item["question"], slots=actual_slots)
+                    elif method == "exact_match_sp_1":
+                        actual_slots = extract_slots_sp_1(item["question"])
                         records = handler(item["question"], slots=actual_slots)
                     else:
+                        actual_slots = extract_slots(item["question"])
                         records = handler(item["question"])
                     from synthesis import synthesize_answer
 
-                    actual_answer, _citations = synthesize_answer(item["question"], records)
+                    actual_answer, _citations = synthesize_answer(
+                        item["question"], records
+                    )
                     comparison = compare_eval_result(item, actual_answer, actual_slots)
                     if comparison["match"] is True:
                         passed += 1
                     access = comparison.get("access") or {}
                     slots = comparison.get("slots") or {}
-                    if access.get("score") is not None or slots.get("score") is not None:
+                    if (
+                        access.get("score") is not None
+                        or slots.get("score") is not None
+                    ):
                         scored += 1
                     row = {
                         **item,
@@ -120,8 +164,17 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                         "records_retrieved": 0,
                         "comparison": {
                             "match": False,
-                            "access": {"score": None, "match": False, "matched_terms": []},
-                            "slots": {"score": None, "match": False, "matched_fields": [], "mismatched_fields": []},
+                            "access": {
+                                "score": None,
+                                "match": False,
+                                "matched_terms": [],
+                            },
+                            "slots": {
+                                "score": None,
+                                "match": False,
+                                "matched_fields": [],
+                                "mismatched_fields": [],
+                            },
                             "actual_slots": None,
                         },
                         "error": str(exc),
@@ -145,7 +198,9 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
         job["finished"] = True
 
 
-def start_eval_job(questions: list[dict], default_retrieval_method: str = "exact_match") -> str:
+def start_eval_job(
+    questions: list[dict], default_retrieval_method: str = "exact_match"
+) -> str:
     for question in questions:
         if not question.get("retrieval_method"):
             question["retrieval_method"] = default_retrieval_method

@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react'
 import { parseCsv } from './evalUtils'
-
-const RETRIEVAL_METHODS = [
-  { value: 'exact_match', label: 'Exact Match' },
-  { value: 'vector_search', label: 'Vector Search' },
-  { value: 'combined', label: 'Combined (Mongo + Docs)' },
-]
+import { RETRIEVAL_METHODS } from './retrievalMethods'
 
 export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
   const [method, setMethod] = useState('exact_match')

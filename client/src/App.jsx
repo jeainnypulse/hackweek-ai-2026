@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import BatchEval from './BatchEval'
 import { downloadJobResults } from './evalUtils'
-
-const RETRIEVAL_METHODS = [
-  { value: 'exact_match', label: 'Exact Match' },
-  { value: 'vector_search', label: 'Vector Search' },
-  { value: 'combined', label: 'Combined (Mongo + Docs)' },
-]
+import { RETRIEVAL_METHODS } from './retrievalMethods'
 
 const TABS = [
   { id: 'chat', label: 'Chat' },

@@ -7,14 +7,28 @@ from typing import Optional
 
 from retrieval.combined import combined_retrieval
 from retrieval.exact_match import exact_match_retrieval, extract_slots
+from retrieval.exact_match_finetuned import (
+    exact_match_finetuned_retrieval,
+    extract_slots_finetuned,
+)
+from retrieval.exact_match_sp_1 import (
+    exact_match_sp_1_retrieval,
+    extract_slots as extract_slots_sp_1,
+)
 from retrieval.vector_search import vector_search_retrieval
 from synthesis import synthesize_answer
 
-EVAL_CSV_PATH = Path(__file__).resolve().parent.parent / "client" / "public" / "qa_pairs.csv"
-FALLBACK_CSV_PATH = Path(__file__).resolve().parent.parent / "client" / "public" / "eval_questions.csv"
+EVAL_CSV_PATH = (
+    Path(__file__).resolve().parent.parent / "client" / "public" / "qa_pairs.csv"
+)
+FALLBACK_CSV_PATH = (
+    Path(__file__).resolve().parent.parent / "client" / "public" / "eval_questions.csv"
+)
 
 RETRIEVAL_HANDLERS = {
     "exact_match": exact_match_retrieval,
+    "exact_match_finetuned": exact_match_finetuned_retrieval,
+    "exact_match_sp_1": exact_match_sp_1_retrieval,
     "vector_search": vector_search_retrieval,
     "combined": combined_retrieval,
 }
@@ -45,7 +59,9 @@ def normalize_row(row: dict, index: int) -> dict:
         "type": (row.get("type") or "").strip(),
         "question": question,
         "expected_access": get_expected_access(row),
-        "expected_slots": parse_expected_slots((row.get("expected_slots") or "").strip()),
+        "expected_slots": parse_expected_slots(
+            (row.get("expected_slots") or "").strip()
+        ),
         "citation": (row.get("citation") or "").strip(),
         "retrieval_method": (row.get("retrieval_method") or "exact_match").strip(),
     }
@@ -180,7 +196,9 @@ def compare_slots(expected_slots: Optional[dict], actual_slots: Optional[dict]) 
     }
 
 
-def compare_eval_result(item: dict, actual_answer: str, actual_slots: Optional[dict]) -> dict:
+def compare_eval_result(
+    item: dict, actual_answer: str, actual_slots: Optional[dict]
+) -> dict:
     access = compare_answers(get_expected_access(item), actual_answer)
     slots = compare_slots(item.get("expected_slots"), actual_slots)
 
@@ -221,7 +239,12 @@ def run_eval_questions(questions: list[dict]) -> dict:
                     "comparison": {
                         "match": None,
                         "access": {"score": None, "match": None, "matched_terms": []},
-                        "slots": {"score": None, "match": None, "matched_fields": [], "mismatched_fields": []},
+                        "slots": {
+                            "score": None,
+                            "match": None,
+                            "matched_fields": [],
+                            "mismatched_fields": [],
+                        },
                         "actual_slots": None,
                     },
                     "error": f"Unknown retrieval method: {method}",
@@ -230,16 +253,26 @@ def run_eval_questions(questions: list[dict]) -> dict:
             continue
 
         try:
-            actual_slots = extract_slots(item["question"])
-            if method == "exact_match":
+            if method == "exact_match_finetuned":
+                actual_slots = extract_slots_finetuned(item["question"])
+                records = handler(item["question"], slots=actual_slots)
+            elif method == "exact_match":
+                actual_slots = extract_slots(item["question"])
+                records = handler(item["question"], slots=actual_slots)
+            elif method == "exact_match_sp_1":
+                actual_slots = extract_slots_sp_1(item["question"])
                 records = handler(item["question"], slots=actual_slots)
             else:
+                actual_slots = extract_slots(item["question"])
                 records = handler(item["question"])
             actual_answer, citations = synthesize_answer(item["question"], records)
             comparison = compare_eval_result(item, actual_answer, actual_slots)
             if comparison["match"] is True:
                 passed += 1
-            if comparison["access"].get("score") is not None or comparison["slots"].get("score") is not None:
+            if (
+                comparison["access"].get("score") is not None
+                or comparison["slots"].get("score") is not None
+            ):
                 scored += 1
             results.append(
                 {
@@ -260,7 +293,12 @@ def run_eval_questions(questions: list[dict]) -> dict:
                     "comparison": {
                         "match": False,
                         "access": {"score": None, "match": False, "matched_terms": []},
-                        "slots": {"score": None, "match": False, "matched_fields": [], "mismatched_fields": []},
+                        "slots": {
+                            "score": None,
+                            "match": False,
+                            "matched_fields": [],
+                            "mismatched_fields": [],
+                        },
                         "actual_slots": None,
                     },
                     "error": str(exc),
