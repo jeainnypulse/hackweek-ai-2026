@@ -40,8 +40,8 @@ class AskRequest(BaseModel):
     retrieval_method: str = "exact_match_conversational"
     skip_log: bool = False
     session_id: Optional[str] = None
-    action: Optional[str] = None  # confirm | reject | provide
-    value: Optional[str] = None
+    action: Optional[str] = None  # provide | cascade_options | submit_cascade
+    value: Optional[Union[str, dict]] = None
 
 
 
@@ -101,6 +101,7 @@ def _finalize_ask(
     retrieval_method: str,
     skip_log: bool,
     confirmed_slots: Optional[dict] = None,
+    mongo_pipeline: Optional[str] = None,
 ) -> dict:
     answer, citations = synthesize_answer(question, records)
     result_id = str(uuid.uuid4())
@@ -118,7 +119,7 @@ def _finalize_ask(
                 "feedback": None,
             }
         )
-    return {
+    result = {
         "id": result_id,
         "status": "complete",
         "question": question,
@@ -129,6 +130,9 @@ def _finalize_ask(
         "confirmed_slots": confirmed_slots or {},
         "session_id": None,
     }
+    if mongo_pipeline:
+        result["mongo_pipeline"] = mongo_pipeline
+    return result
 
 
 @app.post("/api/ask")
@@ -153,6 +157,7 @@ def ask(req: AskRequest):
                     req.retrieval_method,
                     req.skip_log,
                     confirmed_slots=turn.get("confirmed_slots"),
+                    mongo_pipeline=turn.get("mongo_pipeline"),
                 )
 
             return {
@@ -166,6 +171,7 @@ def ask(req: AskRequest):
                 "candidates": turn.get("candidates") or [],
                 "confirmed_slots": turn.get("confirmed_slots") or {},
                 "allow_skip": bool(turn.get("allow_skip")),
+                "cascade": turn.get("cascade"),
                 "answer": turn.get("message"),
                 "citations": [],
                 "retrieval_method": req.retrieval_method,
