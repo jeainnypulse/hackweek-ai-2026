@@ -32,9 +32,35 @@ function parseErrorDetail(data, fallback) {
   return formatAwsError(String(data.detail))
 }
 
-function ConfirmedSlots({ slots }) {
-  const entries = Object.entries(slots || {})
+const SLOT_DISPLAY_ORDER = [
+  'regimen',
+  'indication',
+  'book',
+  'organization',
+  'coverage',
+  'population',
+  'line',
+]
+
+function ConfirmedSlots({ slots, asList = false }) {
+  const entries = SLOT_DISPLAY_ORDER
+    .filter(key => slots?.[key])
+    .map(key => [key, slots[key]])
   if (!entries.length) return null
+
+  if (asList) {
+    return (
+      <ul className="text-sm text-gray-700 space-y-1 mb-3">
+        {entries.map(([key, value]) => (
+          <li key={key}>
+            <span className="text-gray-500">{SLOT_LABELS[key] || key}:</span>{' '}
+            <span className="font-medium text-gray-900">{value}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
   return (
     <div className="flex flex-wrap gap-1.5 mb-3">
       {entries.map(([key, value]) => (
@@ -60,11 +86,17 @@ export default function App() {
   const [bgJob, setBgJob] = useState(null)
   const [sessionId, setSessionId] = useState(null)
   const [slotInput, setSlotInput] = useState('')
+  const [cascadeSelections, setCascadeSelections] = useState({
+    coverage: '',
+    population: '',
+    line: '',
+  })
+  const [pipelineCopied, setPipelineCopied] = useState(false)
   const downloadedJobRef = useRef(null)
 
-  const awaitingConfirmation = result?.status === 'needs_confirmation'
   const awaitingInput = result?.status === 'needs_input' || result?.status === 'error'
-  const inConversation = Boolean(sessionId) && (awaitingConfirmation || awaitingInput)
+  const awaitingCascade = result?.status === 'needs_cascade_input'
+  const inConversation = Boolean(sessionId) && (awaitingInput || awaitingCascade)
 
   useEffect(() => {
     if (!bgJob?.id || bgJob.status !== 'running') return
@@ -140,11 +172,24 @@ export default function App() {
     }
   }
 
+  function syncCascadeSelections(data) {
+    const selections = data?.cascade?.selections || {}
+    setCascadeSelections({
+      coverage: selections.coverage || '',
+      population: selections.population || '',
+      line: selections.line || '',
+    })
+  }
+
   function applyAskResponse(data, originalQuestion) {
     setResult(data)
+    if (data.status === 'needs_cascade_input') {
+      syncCascadeSelections(data)
+    }
     if (data.status === 'complete') {
       setSessionId(null)
       setSlotInput('')
+      setCascadeSelections({ coverage: '', population: '', line: '' })
       setHistory(prev => [{ question: originalQuestion || data.question, method, result: data }, ...prev])
     } else if (data.session_id) {
       setSessionId(data.session_id)
@@ -158,6 +203,8 @@ export default function App() {
     setResult(null)
     setSessionId(null)
     setSlotInput('')
+    setCascadeSelections({ coverage: '', population: '', line: '' })
+    setPipelineCopied(false)
     const asked = question.trim()
     try {
       const res = await fetch('/api/ask', {
@@ -212,12 +259,50 @@ export default function App() {
     await sendSessionAction('provide', slotInput.trim())
   }
 
+  async function refreshCascadeOptions(nextSelections) {
+    setCascadeSelections(nextSelections)
+    await sendSessionAction('cascade_options', nextSelections)
+  }
+
+  async function onCascadeChange(field, value) {
+    let next = { ...cascadeSelections, [field]: value }
+    if (field === 'coverage') {
+      next = { coverage: value, population: '', line: '' }
+    } else if (field === 'population') {
+      next = { ...next, line: '' }
+    }
+    await refreshCascadeOptions(next)
+  }
+
+  async function submitCascade() {
+    await sendSessionAction('submit_cascade', cascadeSelections)
+  }
+
+  function cascadeReady() {
+    const pending = result?.cascade?.pending_slots || []
+    if (pending.includes('coverage') && !cascadeSelections.coverage) return false
+    if (pending.includes('population') && !cascadeSelections.population) return false
+    if (pending.includes('line') && !cascadeSelections.line) return false
+    return pending.length > 0 || Boolean(cascadeSelections.coverage)
+  }
+
   async function submitFeedback(id, rating) {
     await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, rating }),
     })
+  }
+
+  async function copyMongoPipeline(pipeline) {
+    if (!pipeline) return
+    try {
+      await navigator.clipboard.writeText(pipeline)
+      setPipelineCopied(true)
+      setTimeout(() => setPipelineCopied(false), 2000)
+    } catch {
+      setError('Could not copy pipeline to clipboard')
+    }
   }
 
   return (
@@ -314,7 +399,11 @@ export default function App() {
               <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">
-                    {result.status === 'complete' ? 'Answer' : 'Confirm slots'}
+                    {result.status === 'complete'
+                      ? 'Answer'
+                      : awaitingCascade
+                        ? 'Additional details'
+                        : 'Clarify slots'}
                   </span>
                   <span className="text-xs text-gray-400">
                     {result.retrieval_method}
@@ -329,10 +418,9 @@ export default function App() {
                   </p>
                 )}
 
-                <ConfirmedSlots slots={result.confirmed_slots} />
-
                 {result.status === 'complete' ? (
                   <>
+                    <ConfirmedSlots slots={result.confirmed_slots} />
                     <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{result.answer}</p>
                     {result.citations?.length > 0 && (
                       <div className="mt-4 pt-3 border-t border-gray-100">
@@ -351,36 +439,122 @@ export default function App() {
                         <button onClick={() => submitFeedback(result.id, 'no')} className="text-xs px-3 py-1 rounded-md border border-gray-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors">👎 No</button>
                       </div>
                     )}
+                    {result.mongo_pipeline && (
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-gray-400 uppercase tracking-wide">Mongo aggregate pipeline</p>
+                          <button
+                            type="button"
+                            onClick={() => copyMongoPipeline(result.mongo_pipeline)}
+                            className="text-xs px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-700 transition-colors"
+                          >
+                            {pipelineCopied ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                        <pre className="text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 overflow-x-auto whitespace-pre font-mono">
+                          {result.mongo_pipeline}
+                        </pre>
+                      </div>
+                    )}
+                  </>
+                ) : awaitingCascade ? (
+                  <>
+                    <p className="text-sm font-medium text-gray-900 mb-2">Here's what I have confirmed</p>
+                    <ConfirmedSlots slots={result.confirmed_slots} asList />
+                    <p className="text-sm text-gray-600 mb-4 pt-3 border-t border-gray-100">
+                      I would need some additional information from you to give you an accurate response
+                    </p>
+                    <div className="space-y-3">
+                      {(result.cascade?.pending_slots || []).includes('coverage') && (
+                        <label className="block">
+                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coverage</span>
+                          <select
+                            value={cascadeSelections.coverage}
+                            onChange={e => onCascadeChange('coverage', e.target.value)}
+                            disabled={loading}
+                            className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-violet-300 disabled:opacity-50"
+                          >
+                            <option value="">Select coverage…</option>
+                            {(result.cascade?.options?.coverage || []).map(option => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {(result.cascade?.pending_slots || []).includes('population') && (
+                        <label className="block">
+                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Subtype</span>
+                          <select
+                            value={cascadeSelections.population}
+                            onChange={e => onCascadeChange('population', e.target.value)}
+                            disabled={loading || !cascadeSelections.coverage}
+                            className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-violet-300 disabled:opacity-50"
+                          >
+                            <option value="">
+                              {cascadeSelections.coverage ? 'Select subtype…' : 'Select coverage first…'}
+                            </option>
+                            {(result.cascade?.options?.population || []).map(option => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {(result.cascade?.pending_slots || []).includes('line') && (
+                        <label className="block">
+                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line</span>
+                          <select
+                            value={cascadeSelections.line}
+                            onChange={e => onCascadeChange('line', e.target.value)}
+                            disabled={
+                              loading
+                              || !cascadeSelections.coverage
+                              || (
+                                (result.cascade?.pending_slots || []).includes('population')
+                                && !cascadeSelections.population
+                              )
+                            }
+                            className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-violet-300 disabled:opacity-50"
+                          >
+                            <option value="">
+                              {!cascadeSelections.coverage
+                                ? 'Select coverage first…'
+                                : (result.cascade?.pending_slots || []).includes('population') && !cascadeSelections.population
+                                  ? 'Select subtype first…'
+                                  : 'Select line of therapy…'}
+                            </option>
+                            {(result.cascade?.options?.line || []).map(option => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        onClick={submitCascade}
+                        disabled={loading || !cascadeReady()}
+                        className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg transition-colors"
+                      >
+                        {loading ? 'Looking up…' : 'Get answer'}
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-800 leading-relaxed mb-4">{result.message || result.answer}</p>
-
-                    {awaitingConfirmation && (
-                      <div className="flex items-center gap-2 mb-4">
-                        <button
-                          onClick={() => sendSessionAction('confirm')}
-                          disabled={loading}
-                          className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors"
-                        >
-                          {loading ? '...' : 'Yes'}
-                        </button>
-                        <button
-                          onClick={() => sendSessionAction('reject')}
-                          disabled={loading}
-                          className="text-sm border border-gray-200 hover:bg-gray-50 disabled:opacity-40 text-gray-700 px-4 py-1.5 rounded-lg transition-colors"
-                        >
-                          No
-                        </button>
-                      </div>
+                    {Object.keys(result.confirmed_slots || {}).length > 0 && (
+                      <>
+                        <p className="text-sm font-medium text-gray-900 mb-2">Here's what I have confirmed</p>
+                        <ConfirmedSlots slots={result.confirmed_slots} asList />
+                      </>
                     )}
+                    <p className="text-sm text-gray-800 leading-relaxed mb-4 whitespace-pre-wrap">
+                      {result.message || result.answer}
+                    </p>
 
-                    {(awaitingInput || awaitingConfirmation) && (
+                    {awaitingInput && result.status !== 'error' && (
                       <div className="pt-3 border-t border-gray-100">
                         <p className="text-xs text-gray-400 mb-2">
-                          {awaitingConfirmation
-                            ? 'Or type a different value'
-                            : `Enter ${SLOT_LABELS[result.current_slot] || result.current_slot || 'value'}`}
+                          Enter {SLOT_LABELS[result.current_slot] || result.current_slot || 'value'}
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -404,19 +578,10 @@ export default function App() {
                           >
                             Submit
                           </button>
-                          {result.allow_skip && (
-                            <button
-                              onClick={() => sendSessionAction('skip')}
-                              disabled={loading}
-                              className="text-sm border border-gray-200 hover:bg-gray-50 disabled:opacity-40 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              Skip
-                            </button>
-                          )}
                         </div>
                         {result.candidates?.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-1.5">
-                            {result.candidates.slice(0, 8).map(candidate => (
+                            {result.candidates.slice(0, 12).map(candidate => (
                               <button
                                 key={candidate}
                                 type="button"
@@ -438,6 +603,7 @@ export default function App() {
                           setSessionId(null)
                           setResult(null)
                           setSlotInput('')
+                          setCascadeSelections({ coverage: '', population: '', line: '' })
                         }}
                         className="mt-3 text-xs text-violet-600 hover:underline"
                       >
