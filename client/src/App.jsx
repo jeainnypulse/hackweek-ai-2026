@@ -8,6 +8,16 @@ const TABS = [
   { id: 'batch', label: 'Batch Eval' },
 ]
 
+const SLOT_LABELS = {
+  regimen: 'Product',
+  indication: 'Indication',
+  book: 'Book',
+  coverage: 'Coverage',
+  organization: 'Payer',
+  population: 'Subtype',
+  line: 'Line of therapy',
+}
+
 function formatAwsError(message) {
   if (/token has expired|sso|credentials/i.test(message)) {
     return 'AWS SSO session expired. In your terminal run: aws sso login — then restart the server with python main.py.'
@@ -22,16 +32,39 @@ function parseErrorDetail(data, fallback) {
   return formatAwsError(String(data.detail))
 }
 
+function ConfirmedSlots({ slots }) {
+  const entries = Object.entries(slots || {})
+  if (!entries.length) return null
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-3">
+      {entries.map(([key, value]) => (
+        <span
+          key={key}
+          className="text-xs bg-violet-50 text-violet-700 border border-violet-100 rounded-md px-2 py-0.5"
+        >
+          {SLOT_LABELS[key] || key}: {value}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function App() {
   const [tab, setTab] = useState('chat')
   const [question, setQuestion] = useState('')
-  const [method, setMethod] = useState('exact_match')
+  const [method, setMethod] = useState('exact_match_conversational')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [history, setHistory] = useState([])
   const [bgJob, setBgJob] = useState(null)
+  const [sessionId, setSessionId] = useState(null)
+  const [slotInput, setSlotInput] = useState('')
   const downloadedJobRef = useRef(null)
+
+  const awaitingConfirmation = result?.status === 'needs_confirmation'
+  const awaitingInput = result?.status === 'needs_input' || result?.status === 'error'
+  const inConversation = Boolean(sessionId) && (awaitingConfirmation || awaitingInput)
 
   useEffect(() => {
     if (!bgJob?.id || bgJob.status !== 'running') return
@@ -107,29 +140,76 @@ export default function App() {
     }
   }
 
+  function applyAskResponse(data, originalQuestion) {
+    setResult(data)
+    if (data.status === 'complete') {
+      setSessionId(null)
+      setSlotInput('')
+      setHistory(prev => [{ question: originalQuestion || data.question, method, result: data }, ...prev])
+    } else if (data.session_id) {
+      setSessionId(data.session_id)
+    }
+  }
+
   async function ask() {
     if (!question.trim()) return
     setLoading(true)
     setError(null)
     setResult(null)
+    setSessionId(null)
+    setSlotInput('')
+    const asked = question.trim()
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, retrieval_method: method }),
+        body: JSON.stringify({ question: asked, retrieval_method: method }),
       })
       const data = await res.json()
       if (!res.ok) {
         throw new Error(parseErrorDetail(data, 'Something went wrong'))
       }
-      setResult(data)
-      setHistory(prev => [{ question, method, result: data }, ...prev])
+      applyAskResponse(data, asked)
       setQuestion('')
     } catch (err) {
       setError(formatAwsError(err.message))
     } finally {
       setLoading(false)
     }
+  }
+
+  async function sendSessionAction(action, value = null) {
+    if (!sessionId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: result?.question || '',
+          retrieval_method: method,
+          session_id: sessionId,
+          action,
+          value,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(parseErrorDetail(data, 'Something went wrong'))
+      }
+      setSlotInput('')
+      applyAskResponse(data, result?.question)
+    } catch (err) {
+      setError(formatAwsError(err.message))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function submitSlotValue() {
+    if (!slotInput.trim()) return
+    await sendSessionAction('provide', slotInput.trim())
   }
 
   async function submitFeedback(id, rating) {
@@ -190,18 +270,24 @@ export default function App() {
               <textarea
                 rows={3}
                 placeholder="Ask a payer question — e.g. What is Calquence's QoA for 1L CLL under commercial plans?"
-                className="w-full text-sm text-gray-800 placeholder-gray-400 resize-none outline-none"
+                className="w-full text-sm text-gray-800 placeholder-gray-400 resize-none outline-none disabled:opacity-50"
                 value={question}
                 onChange={e => setQuestion(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } }}
+                disabled={inConversation || loading}
               />
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">Retrieval:</span>
                   <select
                     value={method}
-                    onChange={e => setMethod(e.target.value)}
-                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 outline-none bg-white"
+                    onChange={e => {
+                      setMethod(e.target.value)
+                      setSessionId(null)
+                      setResult(null)
+                    }}
+                    disabled={inConversation || loading}
+                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 outline-none bg-white disabled:opacity-50"
                   >
                     {RETRIEVAL_METHODS.map(m => (
                       <option key={m.value} value={m.value}>{m.label}</option>
@@ -210,10 +296,10 @@ export default function App() {
                 </div>
                 <button
                   onClick={ask}
-                  disabled={loading || !question.trim()}
+                  disabled={loading || !question.trim() || inConversation}
                   className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg transition-colors"
                 >
-                  {loading ? 'Thinking...' : 'Ask'}
+                  {loading && !inConversation ? 'Thinking...' : 'Ask'}
                 </button>
               </div>
             </div>
@@ -227,31 +313,139 @@ export default function App() {
             {result && (
               <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">Answer</span>
-                  <span className="text-xs text-gray-400">{result.retrieval_method} · {result.records_retrieved} records</span>
+                  <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">
+                    {result.status === 'complete' ? 'Answer' : 'Confirm slots'}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {result.retrieval_method}
+                    {result.status === 'complete' ? ` · ${result.records_retrieved} records` : ''}
+                  </span>
                 </div>
+
                 {result.question && (
                   <p className="text-sm text-gray-500 mb-3 pb-3 border-b border-gray-100">
                     <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-2">Question</span>
                     {result.question}
                   </p>
                 )}
-                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{result.answer}</p>
-                {result.citations?.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-400 mb-2">Sources</p>
-                    <div className="flex flex-col gap-1">
-                      {result.citations.map((c, i) => (
-                        <div key={i} className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 font-mono">{c}</div>
-                      ))}
-                    </div>
-                  </div>
+
+                <ConfirmedSlots slots={result.confirmed_slots} />
+
+                {result.status === 'complete' ? (
+                  <>
+                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{result.answer}</p>
+                    {result.citations?.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <p className="text-xs text-gray-400 mb-2">Sources</p>
+                        <div className="flex flex-col gap-1">
+                          {result.citations.map((c, i) => (
+                            <div key={i} className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 font-mono">{c}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {result.id && (
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-3">
+                        <span className="text-xs text-gray-400">Would you send this to a client?</span>
+                        <button onClick={() => submitFeedback(result.id, 'yes')} className="text-xs px-3 py-1 rounded-md border border-gray-200 hover:bg-green-50 hover:border-green-300 hover:text-green-700 transition-colors">👍 Yes</button>
+                        <button onClick={() => submitFeedback(result.id, 'no')} className="text-xs px-3 py-1 rounded-md border border-gray-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors">👎 No</button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-800 leading-relaxed mb-4">{result.message || result.answer}</p>
+
+                    {awaitingConfirmation && (
+                      <div className="flex items-center gap-2 mb-4">
+                        <button
+                          onClick={() => sendSessionAction('confirm')}
+                          disabled={loading}
+                          className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white px-4 py-1.5 rounded-lg transition-colors"
+                        >
+                          {loading ? '...' : 'Yes'}
+                        </button>
+                        <button
+                          onClick={() => sendSessionAction('reject')}
+                          disabled={loading}
+                          className="text-sm border border-gray-200 hover:bg-gray-50 disabled:opacity-40 text-gray-700 px-4 py-1.5 rounded-lg transition-colors"
+                        >
+                          No
+                        </button>
+                      </div>
+                    )}
+
+                    {(awaitingInput || awaitingConfirmation) && (
+                      <div className="pt-3 border-t border-gray-100">
+                        <p className="text-xs text-gray-400 mb-2">
+                          {awaitingConfirmation
+                            ? 'Or type a different value'
+                            : `Enter ${SLOT_LABELS[result.current_slot] || result.current_slot || 'value'}`}
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={slotInput}
+                            onChange={e => setSlotInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                submitSlotValue()
+                              }
+                            }}
+                            placeholder="Type value…"
+                            disabled={loading}
+                            className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-violet-300"
+                          />
+                          <button
+                            onClick={submitSlotValue}
+                            disabled={loading || !slotInput.trim()}
+                            className="text-sm bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            Submit
+                          </button>
+                          {result.allow_skip && (
+                            <button
+                              onClick={() => sendSessionAction('skip')}
+                              disabled={loading}
+                              className="text-sm border border-gray-200 hover:bg-gray-50 disabled:opacity-40 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              Skip
+                            </button>
+                          )}
+                        </div>
+                        {result.candidates?.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {result.candidates.slice(0, 8).map(candidate => (
+                              <button
+                                key={candidate}
+                                type="button"
+                                disabled={loading}
+                                onClick={() => sendSessionAction('provide', candidate)}
+                                className="text-xs px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-700 disabled:opacity-40"
+                              >
+                                {candidate}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {result.status === 'error' && (
+                      <button
+                        onClick={() => {
+                          setSessionId(null)
+                          setResult(null)
+                          setSlotInput('')
+                        }}
+                        className="mt-3 text-xs text-violet-600 hover:underline"
+                      >
+                        Start over
+                      </button>
+                    )}
+                  </>
                 )}
-                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-3">
-                  <span className="text-xs text-gray-400">Would you send this to a client?</span>
-                  <button onClick={() => submitFeedback(result.id, 'yes')} className="text-xs px-3 py-1 rounded-md border border-gray-200 hover:bg-green-50 hover:border-green-300 hover:text-green-700 transition-colors">👍 Yes</button>
-                  <button onClick={() => submitFeedback(result.id, 'no')} className="text-xs px-3 py-1 rounded-md border border-gray-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors">👎 No</button>
-                </div>
               </div>
             )}
 

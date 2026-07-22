@@ -9,11 +9,16 @@ from typing import Optional, Union
 load_dotenv()
 
 from retrieval.exact_match import exact_match_retrieval
+from retrieval.exact_match_conversational import (
+    continue_conversation,
+    start_conversation,
+)
 from retrieval.exact_match_finetuned import exact_match_finetuned_retrieval
 from retrieval.exact_match_sp_1 import exact_match_sp_1_retrieval
 from retrieval.vector_search import vector_search_retrieval
 from retrieval.combined import combined_retrieval
 from synthesis import synthesize_answer
+
 
 from db import get_db
 from feedback import save_feedback
@@ -31,9 +36,13 @@ app.add_middleware(
 
 
 class AskRequest(BaseModel):
-    question: str
-    retrieval_method: str = "exact_match"
+    question: str = ""
+    retrieval_method: str = "exact_match_conversational"
     skip_log: bool = False
+    session_id: Optional[str] = None
+    action: Optional[str] = None  # confirm | reject | provide
+    value: Optional[str] = None
+
 
 
 class FeedbackRequest(BaseModel):
@@ -47,18 +56,18 @@ class EvalQuestion(BaseModel):
     question: str
     expected_answer: str = ""
     citation: Optional[str] = None
-    retrieval_method: str = "exact_match"
+    retrieval_method: str = "exact_match_conversational"
 
 
 class EvalRunRequest(BaseModel):
     questions: list[EvalQuestion] = []
-    default_retrieval_method: str = "exact_match"
+    default_retrieval_method: str = "exact_match_conversational"
     csv_text: Optional[str] = None
 
 
 class EvalJobStartRequest(BaseModel):
     questions: list[EvalQuestion] = []
-    default_retrieval_method: str = "exact_match"
+    default_retrieval_method: str = "exact_match_conversational"
     csv_text: Optional[str] = None
 
 
@@ -86,11 +95,86 @@ def health_vector_search():
     return status
 
 
+def _finalize_ask(
+    question: str,
+    records: list,
+    retrieval_method: str,
+    skip_log: bool,
+    confirmed_slots: Optional[dict] = None,
+) -> dict:
+    answer, citations = synthesize_answer(question, records)
+    result_id = str(uuid.uuid4())
+    if not skip_log:
+        db = get_db()
+        db.logs.insert_one(
+            {
+                "_id": result_id,
+                "question": question,
+                "retrieval_method": retrieval_method,
+                "records_retrieved": len(records),
+                "answer": answer,
+                "citations": citations,
+                "confirmed_slots": confirmed_slots,
+                "feedback": None,
+            }
+        )
+    return {
+        "id": result_id,
+        "status": "complete",
+        "question": question,
+        "answer": answer,
+        "citations": citations,
+        "retrieval_method": retrieval_method,
+        "records_retrieved": len(records),
+        "confirmed_slots": confirmed_slots or {},
+        "session_id": None,
+    }
+
+
 @app.post("/api/ask")
 def ask(req: AskRequest):
-    if not req.question.strip():
-        raise HTTPException(status_code=400, detail="Question cannot be empty")
     try:
+        # Multi-turn conversational exact match
+        if req.retrieval_method == "exact_match_conversational":
+            if req.session_id and req.action:
+                turn = continue_conversation(req.session_id, req.action, req.value)
+            elif req.question.strip():
+                turn = start_conversation(req.question.strip())
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Question cannot be empty",
+                )
+
+            if turn.get("status") == "complete":
+                return _finalize_ask(
+                    turn.get("question") or req.question,
+                    turn.get("records") or [],
+                    req.retrieval_method,
+                    req.skip_log,
+                    confirmed_slots=turn.get("confirmed_slots"),
+                )
+
+            return {
+                "id": None,
+                "status": turn.get("status"),
+                "session_id": turn.get("session_id"),
+                "question": turn.get("question") or req.question,
+                "message": turn.get("message"),
+                "current_slot": turn.get("current_slot"),
+                "proposed_value": turn.get("proposed_value"),
+                "candidates": turn.get("candidates") or [],
+                "confirmed_slots": turn.get("confirmed_slots") or {},
+                "allow_skip": bool(turn.get("allow_skip")),
+                "answer": turn.get("message"),
+                "citations": [],
+                "retrieval_method": req.retrieval_method,
+                "records_retrieved": 0,
+            }
+
+        if not req.question.strip():
+            raise HTTPException(status_code=400, detail="Question cannot be empty")
+
         if req.retrieval_method == "exact_match":
             records = exact_match_retrieval(req.question)
         elif req.retrieval_method == "vector_search":
@@ -106,34 +190,14 @@ def ask(req: AskRequest):
                 status_code=400,
                 detail=f"Unknown retrieval method: {req.retrieval_method}",
             )
-        answer, citations = synthesize_answer(req.question, records)
+        return _finalize_ask(
+            req.question, records, req.retrieval_method, req.skip_log
+        )
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    result_id = str(uuid.uuid4())
-    if not req.skip_log:
-        db = get_db()
-        db.logs.insert_one(
-            {
-                "_id": result_id,
-                "question": req.question,
-                "retrieval_method": req.retrieval_method,
-                "records_retrieved": len(records),
-                "answer": answer,
-                "citations": citations,
-                "feedback": None,
-            }
-        )
-    return {
-        "id": result_id,
-        "question": req.question,
-        "answer": answer,
-        "citations": citations,
-        "retrieval_method": req.retrieval_method,
-        "records_retrieved": len(records),
-    }
 
 
 @app.post("/api/feedback")
