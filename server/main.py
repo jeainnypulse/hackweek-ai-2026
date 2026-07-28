@@ -14,7 +14,6 @@ from retrieval.exact_match_conversational import (
     start_conversation,
 )
 from retrieval.exact_match_finetuned import exact_match_finetuned_retrieval
-from retrieval.exact_match_sp_1 import exact_match_sp_1_retrieval
 from retrieval.vector_search import vector_search_retrieval
 from retrieval.combined import combined_retrieval
 from synthesis import synthesize_answer
@@ -189,8 +188,6 @@ def ask(req: AskRequest):
             records = combined_retrieval(req.question)
         elif req.retrieval_method == "exact_match_finetuned":
             records = exact_match_finetuned_retrieval(req.question)
-        elif req.retrieval_method == "exact_match_sp_1":
-            records = exact_match_sp_1_retrieval(req.question)
         else:
             raise HTTPException(
                 status_code=400,

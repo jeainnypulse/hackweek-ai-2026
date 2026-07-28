@@ -12,7 +12,6 @@ from retrieval.exact_match_conversational import (
     extract_slots as extract_slots_conversational,
 )
 from retrieval.exact_match_finetuned import extract_slots_finetuned
-from retrieval.exact_match_sp_1 import extract_slots as extract_slots_sp_1
 
 
 
@@ -135,9 +134,6 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                         records = handler(item["question"], slots=actual_slots)
                     elif method == "exact_match_conversational":
                         actual_slots = extract_slots_conversational(item["question"])
-                        records = handler(item["question"], slots=actual_slots)
-                    elif method == "exact_match_sp_1":
-                        actual_slots = extract_slots_sp_1(item["question"])
                         records = handler(item["question"], slots=actual_slots)
                     else:
                         actual_slots = extract_slots(item["question"])

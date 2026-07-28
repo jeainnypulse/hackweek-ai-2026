@@ -1,0 +1,441 @@
+id,dimension,mention,canonical,notes,method,pred_status,pred_value,pred_method_detail,candidates,expected_status,top1,status_ok,false_accept,in_top3,latency_ms
+1,organization,UHC,UnitedHealth Group,abbreviation,none,matched,UHC,none,,matched,0,0,1,0,0.004
+1,organization,UHC,UnitedHealth Group,abbreviation,catalog,unknown,,catalog,,matched,0,0,0,0,0.87
+1,organization,UHC,UnitedHealth Group,abbreviation,synonym,matched,UnitedHealth Group,synonym,,matched,1,1,0,1,0.42
+1,organization,UHC,UnitedHealth Group,abbreviation,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,1.417
+1,organization,UHC,UnitedHealth Group,abbreviation,cascade,matched,UnitedHealth Group,cascade:synonym,,matched,1,1,0,1,0.721
+1,organization,UHC,UnitedHealth Group,abbreviation,hypothesize_verify,matched,UnitedHealth Group,hypothesize_verify:guess,UnitedHealth Group,matched,1,1,0,1,2331.162
+1,organization,UHC,UnitedHealth Group,abbreviation,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.006
+1,organization,UHC,UnitedHealth Group,abbreviation,regex,unknown,,regex,,matched,0,0,0,0,0.788
+1,organization,UHC,UnitedHealth Group,abbreviation,embed,unknown,,embed,UnitedHealth Group|UCare|University Health Care (KY),matched,0,0,0,1,178.096
+1,organization,UHC,UnitedHealth Group,abbreviation,claude_regex,unknown,,claude_regex,,matched,0,0,0,0,3382.113
+1,organization,UHC,UnitedHealth Group,abbreviation,claude_pick,ambiguous,,claude_pick,UCare|BlueCross Idaho|Capital BlueCross|Essence Healthcare|Iron Road Healthcare,matched,0,0,0,0,1664.299
+2,organization,united healthcare,UnitedHealth Group,colloquial,none,matched,united healthcare,none,,matched,0,0,1,0,0.002
+2,organization,united healthcare,UnitedHealth Group,colloquial,catalog,unknown,,catalog,,matched,0,0,0,0,0.576
+2,organization,united healthcare,UnitedHealth Group,colloquial,synonym,matched,UnitedHealth Group,synonym,,matched,1,1,0,1,0.004
+2,organization,united healthcare,UnitedHealth Group,colloquial,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,1.373
+2,organization,united healthcare,UnitedHealth Group,colloquial,cascade,matched,UnitedHealth Group,cascade:synonym,,matched,1,1,0,1,0.655
+2,organization,united healthcare,UnitedHealth Group,colloquial,hypothesize_verify,matched,UnitedHealth Group,hypothesize_verify:guess,UnitedHealth Group,matched,1,1,0,1,2884.486
+2,organization,united healthcare,UnitedHealth Group,colloquial,phonetic,matched,UnitedHealth Group,phonetic,UnitedHealth Group,matched,1,1,0,1,5.396
+2,organization,united healthcare,UnitedHealth Group,colloquial,regex,unknown,,regex,,matched,0,0,0,0,0.828
+2,organization,united healthcare,UnitedHealth Group,colloquial,embed,unknown,,embed,UnitedHealth Group|Union Health Service|University Health Care (KY),matched,0,0,0,1,189.707
+2,organization,united healthcare,UnitedHealth Group,colloquial,claude_regex,unknown,,claude_regex,,matched,0,0,0,0,1886.013
+2,organization,united healthcare,UnitedHealth Group,colloquial,claude_pick,ambiguous,,claude_pick,Lifetime Healthcare (Excellus BCBS)|Noridian Healthcare Solutions|SantaFe Healthcare|UCare|Aultcare,matched,0,0,0,0,1207.655
+3,organization,United Health Care,UnitedHealth Group,spaced,none,matched,United Health Care,none,,matched,0,0,1,0,0.003
+3,organization,United Health Care,UnitedHealth Group,spaced,catalog,unknown,,catalog,,matched,0,0,0,0,0.816
+3,organization,United Health Care,UnitedHealth Group,spaced,synonym,matched,UnitedHealth Group,synonym,,matched,1,1,0,1,0.006
+3,organization,United Health Care,UnitedHealth Group,spaced,fuzzy,ambiguous,,fuzzy,Fidelis Care|Harvard Pilgrim Health Care|Health Care Service Corporation,matched,0,0,0,0,2.028
+3,organization,United Health Care,UnitedHealth Group,spaced,cascade,matched,UnitedHealth Group,cascade:synonym,,matched,1,1,0,1,0.854
+3,organization,United Health Care,UnitedHealth Group,spaced,hypothesize_verify,matched,UnitedHealth Group,hypothesize_verify:guess,UnitedHealth Group,matched,1,1,0,1,2718.465
+3,organization,United Health Care,UnitedHealth Group,spaced,phonetic,unknown,,phonetic,,matched,0,0,0,0,5.198
+3,organization,United Health Care,UnitedHealth Group,spaced,regex,unknown,,regex,,matched,0,0,0,0,1.176
+3,organization,United Health Care,UnitedHealth Group,spaced,embed,ambiguous,,embed,UnitedHealth Group|University Health Care (KY)|Union Health Service,matched,0,0,0,1,188.271
+3,organization,United Health Care,UnitedHealth Group,spaced,claude_regex,unknown,,claude_regex,,matched,0,0,0,0,1582.419
+3,organization,United Health Care,UnitedHealth Group,spaced,claude_pick,ambiguous,,claude_pick,ATRIO Health|Avera Health|Capital District Physicians' Health Plan|Catholic Health Initiatives|Central California Alliance for Health,matched,0,0,0,0,1135.614
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,none,matched,BCBS Michigan,none,,matched,0,0,1,0,0.002
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,catalog,unknown,,catalog,,matched,0,0,0,0,0.665
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,synonym,matched,BlueCross BlueShield Michigan,synonym,,matched,1,1,0,1,0.005
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,fuzzy,ambiguous,,fuzzy,BCBS AL Oncology Select|BCBS MA|BCBS MN,matched,0,0,0,0,1.535
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,cascade,matched,BlueCross BlueShield Michigan,cascade:synonym,,matched,1,1,0,1,0.616
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,hypothesize_verify,matched,BlueCross BlueShield Michigan,hypothesize_verify:guess,BlueCross BlueShield Michigan,matched,1,1,0,1,3082.839
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,phonetic,unknown,,phonetic,,matched,0,0,0,0,4.588
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,regex,unknown,,regex,,matched,0,0,0,0,0.833
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,embed,unknown,,embed,BCBS MN|BCBS MA|BCBS SC,matched,0,0,0,0,219.521
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,claude_regex,matched,BlueCross BlueShield Michigan,claude_regex,BlueCross BlueShield Michigan,matched,1,1,0,1,4050.775
+4,organization,BCBS Michigan,BlueCross BlueShield Michigan,june22,claude_pick,ambiguous,,claude_pick,BCBS AL Oncology Select|BCBS MA|BCBS MN|BCBS NC Medical Oncology Program|BCBS NM Oncology Quality Program,matched,0,0,0,0,1208.171
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,none,matched,BCBS MI,none,,matched,0,0,1,0,0.005
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,catalog,unknown,,catalog,,matched,0,0,0,0,0.798
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,synonym,matched,BlueCross BlueShield Michigan,synonym,,matched,1,1,0,1,0.006
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,fuzzy,ambiguous,,fuzzy,BCBS MA|BCBS MN|BCBS AL Oncology Select,matched,0,0,0,0,1.51
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,cascade,matched,BlueCross BlueShield Michigan,cascade:synonym,,matched,1,1,0,1,0.708
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,hypothesize_verify,matched,BlueCross BlueShield Michigan,hypothesize_verify:guess,BlueCross BlueShield Michigan,matched,1,1,0,1,2834.789
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,phonetic,ambiguous,,phonetic,BCBS AL Oncology Select|BCBS MA|BCBS MN,matched,0,0,0,0,5.867
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,regex,unknown,,regex,,matched,0,0,0,0,1.125
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,embed,matched,BCBS MN,embed,BCBS MN|BCBS MA|BCBS SC,matched,0,0,1,0,182.987
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,claude_regex,ambiguous,,claude_regex,BlueCross BlueShield Michigan,matched,0,0,0,1,2165.962
+5,organization,BCBS MI,BlueCross BlueShield Michigan,abbreviation,claude_pick,ambiguous,,claude_pick,BCBS MA|BCBS MN|BCBS AL Oncology Select|BCBS NC Medical Oncology Program|BCBS NM Oncology Quality Program,matched,0,0,0,0,1371.043
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,none,matched,bcbs-mi,none,,matched,0,0,1,0,0.003
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,catalog,unknown,,catalog,,matched,0,0,0,0,0.693
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,synonym,matched,BlueCross BlueShield Michigan,synonym,,matched,1,1,0,1,0.005
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,fuzzy,ambiguous,,fuzzy,BCBS MA|BCBS MN|BCBS AL Oncology Select,matched,0,0,0,0,1.303
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,cascade,matched,BlueCross BlueShield Michigan,cascade:synonym,,matched,1,1,0,1,0.684
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,hypothesize_verify,matched,BlueCross BlueShield Michigan,hypothesize_verify:guess,BlueCross BlueShield Michigan,matched,1,1,0,1,3510.896
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,phonetic,ambiguous,,phonetic,BCBS AL Oncology Select|BCBS MA|BCBS MN,matched,0,0,0,0,4.387
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,regex,unknown,,regex,,matched,0,0,0,0,0.684
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,embed,unknown,,embed,BCBS MN|BCBS MA|BCBS SC,matched,0,0,0,0,106.548
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,claude_regex,ambiguous,,claude_regex,BlueCross BlueShield Michigan,matched,0,0,0,1,1886.197
+6,organization,bcbs-mi,BlueCross BlueShield Michigan,slug-like,claude_pick,ambiguous,,claude_pick,BCBS MA|BCBS MN|BCBS AL Oncology Select|BCBS NC Medical Oncology Program|BCBS NM Oncology Quality Program,matched,0,0,0,0,1215.176
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,none,matched,Blue Cross Michigan,none,,matched,0,0,1,0,0.002
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,catalog,unknown,,catalog,,matched,0,0,0,0,0.555
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,synonym,matched,BlueCross BlueShield Michigan,synonym,,matched,1,1,0,1,0.005
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,fuzzy,matched,BlueCross BlueShield Michigan,fuzzy,BlueCross BlueShield Michigan|State of Michigan,matched,1,1,0,1,1.406
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,cascade,matched,BlueCross BlueShield Michigan,cascade:synonym,,matched,1,1,0,1,0.539
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,hypothesize_verify,matched,BlueCross BlueShield Michigan,hypothesize_verify:guess,BlueCross BlueShield Michigan,matched,1,1,0,1,2248.718
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,phonetic,ambiguous,,phonetic,BlueCross BlueShield Michigan|State of Michigan,matched,0,0,0,1,5.089
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,regex,unknown,,regex,,matched,0,0,0,0,1.438
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,embed,matched,BlueCross BlueShield Michigan,embed,BlueCross BlueShield Michigan|BlueCross BlueShield Minnesota|BlueCross BlueShield Illinois,matched,1,1,0,1,211.332
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,claude_regex,matched,BlueCross BlueShield Michigan,claude_regex,BlueCross BlueShield Michigan,matched,1,1,0,1,2228.101
+7,organization,Blue Cross Michigan,BlueCross BlueShield Michigan,partial,claude_pick,matched,BlueCross BlueShield Michigan,claude_pick,Blue Cross and Blue Shield of Alabama|BlueCross BlueShield Michigan|FEP Blue|Florida Blue|Horizon Blue Cross Blue Shield of New Jersey,matched,1,1,0,1,1225.091
+8,organization,Elevance,Anthem (Elevance Health),june22,none,matched,Elevance,none,,matched,0,0,1,0,0.002
+8,organization,Elevance,Anthem (Elevance Health),june22,catalog,unknown,,catalog,,matched,0,0,0,0,0.978
+8,organization,Elevance,Anthem (Elevance Health),june22,synonym,matched,Anthem (Elevance Health),synonym,,matched,1,1,0,1,0.075
+8,organization,Elevance,Anthem (Elevance Health),june22,fuzzy,matched,Anthem (Elevance Health),fuzzy,Anthem (Elevance Health),matched,1,1,0,1,1.794
+8,organization,Elevance,Anthem (Elevance Health),june22,cascade,matched,Anthem (Elevance Health),cascade:synonym,,matched,1,1,0,1,0.659
+8,organization,Elevance,Anthem (Elevance Health),june22,hypothesize_verify,matched,Anthem (Elevance Health),hypothesize_verify:guess,Anthem (Elevance Health),matched,1,1,0,1,3141.06
+8,organization,Elevance,Anthem (Elevance Health),june22,phonetic,matched,Anthem (Elevance Health),phonetic,Anthem (Elevance Health),matched,1,1,0,1,4.196
+8,organization,Elevance,Anthem (Elevance Health),june22,regex,matched,Anthem (Elevance Health),regex,Anthem (Elevance Health),matched,1,1,0,1,0.856
+8,organization,Elevance,Anthem (Elevance Health),june22,embed,unknown,,embed,Anthem (Elevance Health)|Medimpact|Essence Healthcare,matched,0,0,0,1,166.144
+8,organization,Elevance,Anthem (Elevance Health),june22,claude_regex,ambiguous,,claude_regex,Anthem|Anthem (Elevance Health),matched,0,0,0,1,10511.314
+8,organization,Elevance,Anthem (Elevance Health),june22,claude_pick,matched,Anthem (Elevance Health),claude_pick,Anthem (Elevance Health)|BlueCross BlueShield Northern Plains Alliance|Colorado Community Health Alliance|Commonwealth Care Alliance|Essence Healthcare,matched,1,1,0,1,1109.381
+9,organization,Elevance Health,Anthem (Elevance Health),alias,none,matched,Elevance Health,none,,matched,0,0,1,0,0.005
+9,organization,Elevance Health,Anthem (Elevance Health),alias,catalog,unknown,,catalog,,matched,0,0,0,0,0.733
+9,organization,Elevance Health,Anthem (Elevance Health),alias,synonym,matched,Anthem (Elevance Health),synonym,,matched,1,1,0,1,0.006
+9,organization,Elevance Health,Anthem (Elevance Health),alias,fuzzy,matched,Anthem (Elevance Health),fuzzy,Anthem (Elevance Health),matched,1,1,0,1,1.404
+9,organization,Elevance Health,Anthem (Elevance Health),alias,cascade,matched,Anthem (Elevance Health),cascade:synonym,,matched,1,1,0,1,0.58
+9,organization,Elevance Health,Anthem (Elevance Health),alias,hypothesize_verify,matched,Anthem (Elevance Health),hypothesize_verify:guess,Anthem (Elevance Health)|Anthem,matched,1,1,0,1,2519.712
+9,organization,Elevance Health,Anthem (Elevance Health),alias,phonetic,matched,Anthem (Elevance Health),phonetic,Anthem (Elevance Health),matched,1,1,0,1,5.227
+9,organization,Elevance Health,Anthem (Elevance Health),alias,regex,matched,Anthem (Elevance Health),regex,Anthem (Elevance Health),matched,1,1,0,1,1.053
+9,organization,Elevance Health,Anthem (Elevance Health),alias,embed,unknown,,embed,Anthem (Elevance Health)|EmblemHealth|Essence Healthcare,matched,0,0,0,1,112.604
+9,organization,Elevance Health,Anthem (Elevance Health),alias,claude_regex,ambiguous,,claude_regex,Anthem|Anthem (Elevance Health),matched,0,0,0,1,17915.447
+9,organization,Elevance Health,Anthem (Elevance Health),alias,claude_pick,matched,Anthem (Elevance Health),claude_pick,Anthem (Elevance Health)|Affinity Health Plan (NY)|Cambia Health Solutions|Capital District Physicians' Health Plan|Catholic Health Initiatives,matched,1,1,0,1,1337.759
+10,organization,Anthem,Anthem (Elevance Health),brand,none,matched,Anthem,none,,matched,0,0,1,0,0.002
+10,organization,Anthem,Anthem (Elevance Health),brand,catalog,matched,Anthem,catalog,,matched,0,0,1,0,0.563
+10,organization,Anthem,Anthem (Elevance Health),brand,synonym,matched,Anthem (Elevance Health),synonym,,matched,1,1,0,1,0.005
+10,organization,Anthem,Anthem (Elevance Health),brand,fuzzy,matched,Anthem,fuzzy,Anthem|Anthem (Elevance Health),matched,0,0,1,1,1.209
+10,organization,Anthem,Anthem (Elevance Health),brand,cascade,matched,Anthem (Elevance Health),cascade:synonym,,matched,1,1,0,1,0.558
+10,organization,Anthem,Anthem (Elevance Health),brand,hypothesize_verify,matched,Anthem (Elevance Health),hypothesize_verify:guess,Anthem (Elevance Health),matched,1,1,0,1,14568.468
+10,organization,Anthem,Anthem (Elevance Health),brand,phonetic,ambiguous,,phonetic,Anthem|Anthem (Elevance Health),matched,0,0,0,1,4.758
+10,organization,Anthem,Anthem (Elevance Health),brand,regex,ambiguous,,regex,Anthem|Anthem (Elevance Health),matched,0,0,0,1,0.882
+10,organization,Anthem,Anthem (Elevance Health),brand,embed,matched,Anthem,embed,Anthem|Anthem (Elevance Health)|Aetna,matched,0,0,1,1,130.132
+10,organization,Anthem,Anthem (Elevance Health),brand,claude_regex,ambiguous,,claude_regex,Anthem|Anthem (Elevance Health),matched,0,0,0,1,3355.971
+10,organization,Anthem,Anthem (Elevance Health),brand,claude_pick,ambiguous,,claude_pick,Anthem|Anthem (Elevance Health)|Health Plan of the Upper Ohio Valley|The Carle Foundation|Alignment Healthcare USA,matched,0,0,0,1,7109.422
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,none,matched,Blue Cross Tennessee,none,,matched,0,0,1,0,0.003
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,catalog,unknown,,catalog,,matched,0,0,0,0,0.765
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,synonym,matched,BlueCross BlueShield Tennessee,synonym,,matched,1,1,0,1,0.01
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,fuzzy,matched,BlueCross BlueShield Tennessee,fuzzy,BlueCross BlueShield Tennessee|State of Tennessee,matched,1,1,0,1,1.615
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,cascade,matched,BlueCross BlueShield Tennessee,cascade:synonym,,matched,1,1,0,1,0.596
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,hypothesize_verify,matched,BlueCross BlueShield Tennessee,hypothesize_verify:guess,BlueCross BlueShield Tennessee,matched,1,1,0,1,2709.386
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,phonetic,ambiguous,,phonetic,BlueCross BlueShield Tennessee|State of Tennessee,matched,0,0,0,1,4.284
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,regex,unknown,,regex,,matched,0,0,0,0,0.953
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,embed,matched,BlueCross BlueShield Tennessee,embed,BlueCross BlueShield Tennessee|BlueCross BlueShield Texas|BlueCross BlueShield North Carolina,matched,1,1,0,1,174.78
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,claude_regex,matched,BlueCross BlueShield Tennessee,claude_regex,BlueCross BlueShield Tennessee|BCBS TN,matched,1,1,0,1,4616.967
+11,organization,Blue Cross Tennessee,BlueCross BlueShield Tennessee,june22,claude_pick,matched,BlueCross BlueShield Tennessee,claude_pick,Blue Cross and Blue Shield of Alabama|BlueCross BlueShield Tennessee|FEP Blue|Florida Blue|Horizon Blue Cross Blue Shield of New Jersey,matched,1,1,0,1,1147.147
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,none,matched,BCBS TN,none,,matched,0,0,1,0,0.002
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,catalog,matched,BCBS TN,catalog,,matched,0,0,1,0,0.561
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,synonym,matched,BlueCross BlueShield Tennessee,synonym,,matched,1,1,0,1,0.005
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,fuzzy,matched,BCBS TN,fuzzy,BCBS TN|BCBS MN|BCBS AL Oncology Select,matched,0,0,1,0,1.459
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,cascade,matched,BlueCross BlueShield Tennessee,cascade:synonym,,matched,1,1,0,1,0.586
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,hypothesize_verify,matched,BlueCross BlueShield Tennessee,hypothesize_verify:guess,BlueCross BlueShield Tennessee,matched,1,1,0,1,2114.975
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,phonetic,ambiguous,,phonetic,BCBS AL Oncology Select|BCBS MA|BCBS MN,matched,0,0,0,0,7.07
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,regex,matched,BCBS TN,regex,BCBS TN,matched,0,0,1,0,0.954
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,embed,matched,BCBS TN,embed,BCBS TN|BCBS SC|BCBS MN,matched,0,0,1,0,138.655
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,claude_regex,ambiguous,,claude_regex,BlueCross BlueShield Tennessee|BCBS TN,matched,0,0,0,1,3452.394
+12,organization,BCBS TN,BlueCross BlueShield Tennessee,abbreviation,claude_pick,matched,BCBS TN,claude_pick,BCBS TN|BCBS MN|BCBS AL Oncology Select|BCBS NC Medical Oncology Program|BCBS NM Oncology Quality Program,matched,0,0,1,0,1149.032
+13,organization,Kaiser,Kaiser Permanente,short,none,matched,Kaiser,none,,matched,0,0,1,0,0.002
+13,organization,Kaiser,Kaiser Permanente,short,catalog,unknown,,catalog,,matched,0,0,0,0,0.653
+13,organization,Kaiser,Kaiser Permanente,short,synonym,matched,Kaiser Permanente,synonym,,matched,1,1,0,1,0.006
+13,organization,Kaiser,Kaiser Permanente,short,fuzzy,matched,Kaiser Permanente,fuzzy,Kaiser Permanente,matched,1,1,0,1,1.212
+13,organization,Kaiser,Kaiser Permanente,short,cascade,matched,Kaiser Permanente,cascade:synonym,,matched,1,1,0,1,0.531
+13,organization,Kaiser,Kaiser Permanente,short,hypothesize_verify,matched,Kaiser Permanente,hypothesize_verify:guess,Kaiser Permanente,matched,1,1,0,1,3343.419
+13,organization,Kaiser,Kaiser Permanente,short,phonetic,matched,Kaiser Permanente,phonetic,Kaiser Permanente,matched,1,1,0,1,12.812
+13,organization,Kaiser,Kaiser Permanente,short,regex,matched,Kaiser Permanente,regex,Kaiser Permanente,matched,1,1,0,1,2.13
+13,organization,Kaiser,Kaiser Permanente,short,embed,unknown,,embed,Kaiser Permanente|State of Kansas|CGS Administrators,matched,0,0,0,1,177.138
+13,organization,Kaiser,Kaiser Permanente,short,claude_regex,matched,Kaiser Permanente,claude_regex,Kaiser Permanente,matched,1,1,0,1,1397.859
+13,organization,Kaiser,Kaiser Permanente,short,claude_pick,matched,Kaiser Permanente,claude_pick,Kaiser Permanente|Serve You Prescription Services (SPS)|Indian Health Service (IHS)|National Government Services|Rocky Mountain Health Care Services,matched,1,1,0,1,2398.549
+14,organization,KP,Kaiser Permanente,abbreviation,none,matched,KP,none,,matched,0,0,1,0,0.002
+14,organization,KP,Kaiser Permanente,abbreviation,catalog,unknown,,catalog,,matched,0,0,0,0,0.609
+14,organization,KP,Kaiser Permanente,abbreviation,synonym,matched,Kaiser Permanente,synonym,,matched,1,1,0,1,0.006
+14,organization,KP,Kaiser Permanente,abbreviation,fuzzy,unknown,,fuzzy,CVS/Caremark|Highmark|Kroger PBM,matched,0,0,0,0,3.244
+14,organization,KP,Kaiser Permanente,abbreviation,cascade,matched,Kaiser Permanente,cascade:synonym,,matched,1,1,0,1,0.772
+14,organization,KP,Kaiser Permanente,abbreviation,hypothesize_verify,matched,Kaiser Permanente,hypothesize_verify:guess,Kaiser Permanente,matched,1,1,0,1,1772.842
+14,organization,KP,Kaiser Permanente,abbreviation,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.007
+14,organization,KP,Kaiser Permanente,abbreviation,regex,unknown,,regex,,matched,0,0,0,0,0.823
+14,organization,KP,Kaiser Permanente,abbreviation,embed,unknown,,embed,SCAN|CareFirst|Kaiser Permanente,matched,0,0,0,1,170.04
+14,organization,KP,Kaiser Permanente,abbreviation,claude_regex,matched,Kaiser Permanente,claude_regex,Kaiser Permanente,matched,1,1,0,1,1522.443
+14,organization,KP,Kaiser Permanente,abbreviation,claude_pick,ambiguous,,claude_pick,CVS/Caremark|Highmark|Kroger PBM|MHBP|Palmetto GBA,matched,0,0,0,0,1466.929
+15,organization,CVS,CVS,exact-ish,none,matched,CVS,none,,matched,1,1,0,1,0.002
+15,organization,CVS,CVS,exact-ish,catalog,matched,CVS,catalog,,matched,1,1,0,1,0.553
+15,organization,CVS,CVS,exact-ish,synonym,matched,CVS,synonym,,matched,1,1,0,1,0.004
+15,organization,CVS,CVS,exact-ish,fuzzy,matched,CVS,fuzzy,CVS|CVS Health|CVS/Caremark,matched,1,1,0,1,1.332
+15,organization,CVS,CVS,exact-ish,cascade,matched,CVS,cascade:synonym,,matched,1,1,0,1,0.737
+15,organization,CVS,CVS,exact-ish,hypothesize_verify,matched,CVS,hypothesize_verify:guess,CVS|CVS Health|CVS/Caremark,matched,1,1,0,1,2495.693
+15,organization,CVS,CVS,exact-ish,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.007
+15,organization,CVS,CVS,exact-ish,regex,ambiguous,,regex,CVS|CVS Health|CVS/Caremark,matched,0,0,0,1,0.919
+15,organization,CVS,CVS,exact-ish,embed,matched,CVS,embed,CVS|CVS Health|CVS/Caremark,matched,1,1,0,1,206.676
+15,organization,CVS,CVS,exact-ish,claude_regex,ambiguous,,claude_regex,CVS|CVS Health|CVS/Caremark,matched,0,0,0,1,1510.119
+15,organization,CVS,CVS,exact-ish,claude_pick,matched,CVS,claude_pick,CVS|CVS Health|CVS/Caremark|Prime Therapeutics|MCS Life Insurance,matched,1,1,0,1,2660.941
+16,organization,Molina,Molina Healthcare,short,none,matched,Molina,none,,matched,0,0,1,0,0.002
+16,organization,Molina,Molina Healthcare,short,catalog,unknown,,catalog,,matched,0,0,0,0,1.039
+16,organization,Molina,Molina Healthcare,short,synonym,matched,Molina Healthcare,synonym,,matched,1,1,0,1,0.006
+16,organization,Molina,Molina Healthcare,short,fuzzy,matched,Molina Healthcare,fuzzy,Molina Healthcare,matched,1,1,0,1,2.803
+16,organization,Molina,Molina Healthcare,short,cascade,matched,Molina Healthcare,cascade:synonym,,matched,1,1,0,1,0.955
+16,organization,Molina,Molina Healthcare,short,hypothesize_verify,matched,Molina Healthcare,hypothesize_verify:guess,Molina Healthcare,matched,1,1,0,1,2303.666
+16,organization,Molina,Molina Healthcare,short,phonetic,matched,Molina Healthcare,phonetic,Molina Healthcare,matched,1,1,0,1,5.293
+16,organization,Molina,Molina Healthcare,short,regex,matched,Molina Healthcare,regex,Molina Healthcare,matched,1,1,0,1,1.035
+16,organization,Molina,Molina Healthcare,short,embed,unknown,,embed,Molina Healthcare|Medica (MN)|Humana,matched,0,0,0,1,266.789
+16,organization,Molina,Molina Healthcare,short,claude_regex,matched,Molina Healthcare,claude_regex,Molina Healthcare,matched,1,1,0,1,1265.214
+16,organization,Molina,Molina Healthcare,short,claude_pick,matched,Molina Healthcare,claude_pick,Molina Healthcare|BlueCross BlueShield North Carolina|BlueCross BlueShield South Carolina|State of North Carolina|State of South Carolina,matched,1,1,0,1,3249.51
+17,organization,Aetna,Aetna,canonical control,none,matched,Aetna,none,,matched,1,1,0,1,0.002
+17,organization,Aetna,Aetna,canonical control,catalog,matched,Aetna,catalog,,matched,1,1,0,1,0.722
+17,organization,Aetna,Aetna,canonical control,synonym,matched,Aetna,synonym,,matched,1,1,0,1,0.006
+17,organization,Aetna,Aetna,canonical control,fuzzy,matched,Aetna,fuzzy,Aetna,matched,1,1,0,1,1.748
+17,organization,Aetna,Aetna,canonical control,cascade,matched,Aetna,cascade:synonym,,matched,1,1,0,1,0.699
+17,organization,Aetna,Aetna,canonical control,hypothesize_verify,matched,Aetna,hypothesize_verify:guess,Aetna|CVS Health,matched,1,1,0,1,4359.33
+17,organization,Aetna,Aetna,canonical control,phonetic,matched,Aetna,phonetic,Aetna,matched,1,1,0,1,217.939
+17,organization,Aetna,Aetna,canonical control,regex,matched,Aetna,regex,Aetna,matched,1,1,0,1,0.779
+17,organization,Aetna,Aetna,canonical control,embed,matched,Aetna,embed,Aetna|Anthem (Elevance Health)|Avera Health,matched,1,1,0,1,115.983
+17,organization,Aetna,Aetna,canonical control,claude_regex,matched,Aetna,claude_regex,Aetna,matched,1,1,0,1,2700.427
+17,organization,Aetna,Aetna,canonical control,claude_pick,matched,Aetna,claude_pick,Aetna|BlueCross BlueShield Louisiana|BlueCross BlueShield Montana|State of Indiana|State of Louisiana,matched,1,1,0,1,1521.869
+18,organization,Cigna,Cigna,canonical control,none,matched,Cigna,none,,matched,1,1,0,1,0.002
+18,organization,Cigna,Cigna,canonical control,catalog,matched,Cigna,catalog,,matched,1,1,0,1,0.662
+18,organization,Cigna,Cigna,canonical control,synonym,matched,Cigna,synonym,,matched,1,1,0,1,0.005
+18,organization,Cigna,Cigna,canonical control,fuzzy,matched,Cigna,fuzzy,Cigna,matched,1,1,0,1,1.369
+18,organization,Cigna,Cigna,canonical control,cascade,matched,Cigna,cascade:synonym,,matched,1,1,0,1,0.625
+18,organization,Cigna,Cigna,canonical control,hypothesize_verify,matched,Cigna,hypothesize_verify:guess,Cigna,matched,1,1,0,1,2253.237
+18,organization,Cigna,Cigna,canonical control,phonetic,matched,Cigna,phonetic,Cigna,matched,1,1,0,1,4.812
+18,organization,Cigna,Cigna,canonical control,regex,matched,Cigna,regex,Cigna,matched,1,1,0,1,0.725
+18,organization,Cigna,Cigna,canonical control,embed,matched,Cigna,embed,Cigna|Caidan Enterprises|Humana,matched,1,1,0,1,303.719
+18,organization,Cigna,Cigna,canonical control,claude_regex,matched,Cigna,claude_regex,Cigna,matched,1,1,0,1,2450.165
+18,organization,Cigna,Cigna,canonical control,claude_pick,matched,Cigna,claude_pick,Cigna|BlueCross BlueShield Michigan|State of Michigan|BlueCross BlueShield North Carolina|BlueCross BlueShield South Carolina,matched,1,1,0,1,1682.413
+19,organization,aetna,Aetna,casefold catalog,none,matched,aetna,none,,matched,0,0,1,0,0.002
+19,organization,aetna,Aetna,casefold catalog,catalog,matched,Aetna,catalog,,matched,1,1,0,1,0.877
+19,organization,aetna,Aetna,casefold catalog,synonym,matched,Aetna,synonym,,matched,1,1,0,1,0.01
+19,organization,aetna,Aetna,casefold catalog,fuzzy,matched,Aetna,fuzzy,Aetna,matched,1,1,0,1,1.581
+19,organization,aetna,Aetna,casefold catalog,cascade,matched,Aetna,cascade:synonym,,matched,1,1,0,1,0.71
+19,organization,aetna,Aetna,casefold catalog,hypothesize_verify,matched,Aetna,hypothesize_verify:guess,Aetna,matched,1,1,0,1,2369.21
+19,organization,aetna,Aetna,casefold catalog,phonetic,matched,Aetna,phonetic,Aetna,matched,1,1,0,1,4.655
+19,organization,aetna,Aetna,casefold catalog,regex,matched,Aetna,regex,Aetna,matched,1,1,0,1,0.755
+19,organization,aetna,Aetna,casefold catalog,embed,matched,Aetna,embed,Aetna|Avera Health|Health Net,matched,1,1,0,1,181.248
+19,organization,aetna,Aetna,casefold catalog,claude_regex,matched,Aetna,claude_regex,Aetna,matched,1,1,0,1,1777.78
+19,organization,aetna,Aetna,casefold catalog,claude_pick,matched,Aetna,claude_pick,Aetna|BlueCross BlueShield Louisiana|BlueCross BlueShield Montana|State of Indiana|State of Louisiana,matched,1,1,0,1,1195.128
+20,organization,Humana,Humana,canonical control,none,matched,Humana,none,,matched,1,1,0,1,0.002
+20,organization,Humana,Humana,canonical control,catalog,matched,Humana,catalog,,matched,1,1,0,1,0.714
+20,organization,Humana,Humana,canonical control,synonym,matched,Humana,synonym,,matched,1,1,0,1,0.006
+20,organization,Humana,Humana,canonical control,fuzzy,matched,Humana,fuzzy,Humana,matched,1,1,0,1,1.174
+20,organization,Humana,Humana,canonical control,cascade,matched,Humana,cascade:synonym,,matched,1,1,0,1,0.824
+20,organization,Humana,Humana,canonical control,hypothesize_verify,matched,Humana,hypothesize_verify:guess,Humana,matched,1,1,0,1,2143.917
+20,organization,Humana,Humana,canonical control,phonetic,matched,Humana,phonetic,Humana,matched,1,1,0,1,5.693
+20,organization,Humana,Humana,canonical control,regex,matched,Humana,regex,Humana,matched,1,1,0,1,0.98
+20,organization,Humana,Humana,canonical control,embed,matched,Humana,embed,Humana|Cigna|Medimpact,matched,1,1,0,1,490.194
+20,organization,Humana,Humana,canonical control,claude_regex,matched,Humana,claude_regex,Humana,matched,1,1,0,1,1535.408
+20,organization,Humana,Humana,canonical control,claude_pick,matched,Humana,claude_pick,Humana|Triple-S Management|Aultman Health|BlueCross BlueShield Louisiana|BlueCross BlueShield Montana,matched,1,1,0,1,1125.444
+21,organization,Highmark,Highmark,canonical control,none,matched,Highmark,none,,matched,1,1,0,1,0.002
+21,organization,Highmark,Highmark,canonical control,catalog,matched,Highmark,catalog,,matched,1,1,0,1,0.664
+21,organization,Highmark,Highmark,canonical control,synonym,matched,Highmark,synonym,,matched,1,1,0,1,0.005
+21,organization,Highmark,Highmark,canonical control,fuzzy,matched,Highmark,fuzzy,Highmark,matched,1,1,0,1,1.426
+21,organization,Highmark,Highmark,canonical control,cascade,matched,Highmark,cascade:synonym,,matched,1,1,0,1,0.605
+21,organization,Highmark,Highmark,canonical control,hypothesize_verify,matched,Highmark,hypothesize_verify:guess,Highmark,matched,1,1,0,1,2219.874
+21,organization,Highmark,Highmark,canonical control,phonetic,matched,Highmark,phonetic,Highmark,matched,1,1,0,1,8.502
+21,organization,Highmark,Highmark,canonical control,regex,matched,Highmark,regex,Highmark,matched,1,1,0,1,1.23
+21,organization,Highmark,Highmark,canonical control,embed,matched,Highmark,embed,Highmark|Wellmark BlueCross BlueShield|CVS/Caremark,matched,1,1,0,1,112.567
+21,organization,Highmark,Highmark,canonical control,claude_regex,matched,Highmark,claude_regex,Highmark,matched,1,1,0,1,2820.617
+21,organization,Highmark,Highmark,canonical control,claude_pick,matched,Highmark,claude_pick,Highmark|CVS/Caremark|Wellmark BlueCross BlueShield|BlueCross BlueShield Michigan|State of Michigan,matched,1,1,0,1,1156.552
+22,organization,Blue Shield of California,,trap_unknown_or_oos,none,matched,Blue Shield of California,none,,unknown,0,0,1,0,0.003
+22,organization,Blue Shield of California,,trap_unknown_or_oos,catalog,unknown,,catalog,,unknown,1,1,0,1,0.685
+22,organization,Blue Shield of California,,trap_unknown_or_oos,synonym,unknown,,synonym,,unknown,1,1,0,1,0.006
+22,organization,Blue Shield of California,,trap_unknown_or_oos,fuzzy,matched,BlueShield California,fuzzy,BlueShield California|Central California Alliance for Health|State of California,unknown,0,0,1,0,1.455
+22,organization,Blue Shield of California,,trap_unknown_or_oos,cascade,ambiguous,,cascade:hypothesize_verify:pattern,BlueShield California,unknown,0,1,0,0,2621.76
+22,organization,Blue Shield of California,,trap_unknown_or_oos,hypothesize_verify,ambiguous,,hypothesize_verify:pattern,BlueShield California,unknown,0,1,0,0,2137.009
+22,organization,Blue Shield of California,,trap_unknown_or_oos,phonetic,ambiguous,,phonetic,"BlueShield California|Central California Alliance for Health|Central Health Plan of California, Inc.",unknown,0,1,0,0,5.168
+22,organization,Blue Shield of California,,trap_unknown_or_oos,regex,unknown,,regex,,unknown,1,1,0,1,0.939
+22,organization,Blue Shield of California,,trap_unknown_or_oos,embed,matched,BlueShield California,embed,BlueShield California|Blue Cross and Blue Shield of Alabama|BlueCross BlueShield Arizona,unknown,0,0,1,0,184.263
+22,organization,Blue Shield of California,,trap_unknown_or_oos,claude_regex,matched,BlueShield California,claude_regex,BlueShield California,unknown,0,0,1,0,2629.746
+22,organization,Blue Shield of California,,trap_unknown_or_oos,claude_pick,matched,BlueShield California,claude_pick,BlueShield California|AmeriHealth Caritas Family of Companies|Central California Alliance for Health|County of Orange|FEP Blue,unknown,0,0,1,0,1126.27
+23,organization,BCBS,,trap_ambiguous,none,matched,BCBS,none,,ambiguous,0,0,1,0,0.002
+23,organization,BCBS,,trap_ambiguous,catalog,unknown,,catalog,,ambiguous,0,1,0,0,0.749
+23,organization,BCBS,,trap_ambiguous,synonym,unknown,,synonym,,ambiguous,0,1,0,0,0.028
+23,organization,BCBS,,trap_ambiguous,fuzzy,ambiguous,,fuzzy,BCBS AL Oncology Select|BCBS MA|BCBS MN,ambiguous,1,1,0,1,1.312
+23,organization,BCBS,,trap_ambiguous,cascade,ambiguous,,cascade:hypothesize_verify:pattern,Arkansas BlueCross BlueShield|BlueCross BlueShield Alabama|BlueCross BlueShield Arizona|BlueCross BlueShield Hawaii (HMSA)|BlueCross BlueShield Illinois,ambiguous,1,1,0,1,3529.607
+23,organization,BCBS,,trap_ambiguous,hypothesize_verify,ambiguous,,hypothesize_verify:pattern,Arkansas BlueCross BlueShield|BlueCross BlueShield Alabama|BlueCross BlueShield Arizona|BlueCross BlueShield Hawaii (HMSA)|BlueCross BlueShield Illinois,ambiguous,1,1,0,1,2366.653
+23,organization,BCBS,,trap_ambiguous,phonetic,unknown,,phonetic,,ambiguous,0,1,0,0,0.008
+23,organization,BCBS,,trap_ambiguous,regex,ambiguous,,regex,BCBS AL Oncology Select|BCBS MA|BCBS MN,ambiguous,1,1,0,1,0.802
+23,organization,BCBS,,trap_ambiguous,embed,matched,BCBS SC,embed,BCBS SC|BCBS MA|BCBS MN,ambiguous,0,0,1,0,195.894
+23,organization,BCBS,,trap_ambiguous,claude_regex,ambiguous,,claude_regex,Horizon Blue Cross Blue Shield of New Jersey|Arkansas BlueCross BlueShield|BlueCross BlueShield Alabama,ambiguous,1,1,0,1,1420.706
+23,organization,BCBS,,trap_ambiguous,claude_pick,ambiguous,,claude_pick,BCBS AL Oncology Select|BCBS MA|BCBS MN|BCBS SC|BCBS TN,ambiguous,1,1,0,1,1578.046
+24,regimen,Brukinsa,Brukinsa,canonical control,none,matched,Brukinsa,none,,matched,1,1,0,1,0.002
+24,regimen,Brukinsa,Brukinsa,canonical control,catalog,matched,Brukinsa,catalog,,matched,1,1,0,1,0.992
+24,regimen,Brukinsa,Brukinsa,canonical control,synonym,matched,Brukinsa,synonym,,matched,1,1,0,1,0.005
+24,regimen,Brukinsa,Brukinsa,canonical control,fuzzy,matched,Brukinsa,fuzzy,Brukinsa|Brukinsa(SEQUOIA),matched,1,1,0,1,1.937
+24,regimen,Brukinsa,Brukinsa,canonical control,cascade,matched,Brukinsa,cascade:synonym,,matched,1,1,0,1,0.83
+24,regimen,Brukinsa,Brukinsa,canonical control,hypothesize_verify,matched,Brukinsa,hypothesize_verify:guess,Brukinsa,matched,1,1,0,1,1801.153
+24,regimen,Brukinsa,Brukinsa,canonical control,phonetic,ambiguous,,phonetic,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,6.568
+24,regimen,Brukinsa,Brukinsa,canonical control,regex,ambiguous,,regex,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,1.113
+24,regimen,Brukinsa,Brukinsa,canonical control,embed,matched,Brukinsa,embed,Brukinsa|Brukinsa(SEQUOIA)|Jaypirca(BRUIN),matched,1,1,0,1,250.21
+24,regimen,Brukinsa,Brukinsa,canonical control,claude_regex,ambiguous,,claude_regex,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,1724.764
+24,regimen,Brukinsa,Brukinsa,canonical control,claude_pick,matched,Brukinsa,claude_pick,Brukinsa|Brukinsa(SEQUOIA)|Jaypirca(BRUIN)|Yonsa|rinatabart sesutecan,matched,1,1,0,1,1448.102
+25,regimen,brukinsa,Brukinsa,casefold,none,matched,brukinsa,none,,matched,0,0,1,0,0.002
+25,regimen,brukinsa,Brukinsa,casefold,catalog,matched,Brukinsa,catalog,,matched,1,1,0,1,1.069
+25,regimen,brukinsa,Brukinsa,casefold,synonym,matched,Brukinsa,synonym,,matched,1,1,0,1,0.007
+25,regimen,brukinsa,Brukinsa,casefold,fuzzy,matched,Brukinsa,fuzzy,Brukinsa|Brukinsa(SEQUOIA),matched,1,1,0,1,2.058
+25,regimen,brukinsa,Brukinsa,casefold,cascade,matched,Brukinsa,cascade:synonym,,matched,1,1,0,1,0.742
+25,regimen,brukinsa,Brukinsa,casefold,hypothesize_verify,matched,Brukinsa,hypothesize_verify:guess,Brukinsa,matched,1,1,0,1,3099.357
+25,regimen,brukinsa,Brukinsa,casefold,phonetic,ambiguous,,phonetic,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,7.673
+25,regimen,brukinsa,Brukinsa,casefold,regex,ambiguous,,regex,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,0.863
+25,regimen,brukinsa,Brukinsa,casefold,embed,matched,Brukinsa,embed,Brukinsa|Brukinsa(SEQUOIA)|Skysona,matched,1,1,0,1,136.807
+25,regimen,brukinsa,Brukinsa,casefold,claude_regex,ambiguous,,claude_regex,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,1517.799
+25,regimen,brukinsa,Brukinsa,casefold,claude_pick,matched,Brukinsa,claude_pick,Brukinsa|Brukinsa(SEQUOIA)|Jaypirca(BRUIN)|Yonsa|rinatabart sesutecan,matched,1,1,0,1,1296.59
+26,regimen,bruksinsa,Brukinsa,typo,none,matched,bruksinsa,none,,matched,0,0,1,0,0.003
+26,regimen,bruksinsa,Brukinsa,typo,catalog,unknown,,catalog,,matched,0,0,0,0,0.979
+26,regimen,bruksinsa,Brukinsa,typo,synonym,matched,Brukinsa,synonym,,matched,1,1,0,1,0.005
+26,regimen,bruksinsa,Brukinsa,typo,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,1.528
+26,regimen,bruksinsa,Brukinsa,typo,cascade,matched,Brukinsa,cascade:synonym,,matched,1,1,0,1,0.905
+26,regimen,bruksinsa,Brukinsa,typo,hypothesize_verify,matched,Brukinsa,hypothesize_verify:guess,Brukinsa,matched,1,1,0,1,2416.244
+26,regimen,bruksinsa,Brukinsa,typo,phonetic,ambiguous,,phonetic,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,7.407
+26,regimen,bruksinsa,Brukinsa,typo,regex,unknown,,regex,,matched,0,0,0,0,1.373
+26,regimen,bruksinsa,Brukinsa,typo,embed,unknown,,embed,Brukinsa|Brukinsa(SEQUOIA)|Bizengri,matched,0,0,0,1,123.071
+26,regimen,bruksinsa,Brukinsa,typo,claude_regex,ambiguous,,claude_regex,Brukinsa|Brukinsa(SEQUOIA)|Jaypirca(BRUIN),matched,0,0,0,1,2004.756
+26,regimen,bruksinsa,Brukinsa,typo,claude_pick,matched,Brukinsa,claude_pick,Brukinsa|Brukinsa(SEQUOIA)|Yonsa|Jaypirca(BRUIN)|Besponsa,matched,1,1,0,1,1258.449
+27,regimen,zanubrutinib,Brukinsa,generic,none,matched,zanubrutinib,none,,matched,0,0,1,0,0.026
+27,regimen,zanubrutinib,Brukinsa,generic,catalog,unknown,,catalog,,matched,0,0,0,0,1.056
+27,regimen,zanubrutinib,Brukinsa,generic,synonym,matched,Brukinsa,synonym,,matched,1,1,0,1,0.006
+27,regimen,zanubrutinib,Brukinsa,generic,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,1.739
+27,regimen,zanubrutinib,Brukinsa,generic,cascade,matched,Brukinsa,cascade:synonym,,matched,1,1,0,1,0.731
+27,regimen,zanubrutinib,Brukinsa,generic,hypothesize_verify,matched,Brukinsa,hypothesize_verify:guess,Brukinsa,matched,1,1,0,1,2721.36
+27,regimen,zanubrutinib,Brukinsa,generic,phonetic,unknown,,phonetic,,matched,0,0,0,0,8.472
+27,regimen,zanubrutinib,Brukinsa,generic,regex,unknown,,regex,,matched,0,0,0,0,1.171
+27,regimen,zanubrutinib,Brukinsa,generic,embed,unknown,,embed,Quizartinib|Alunbrig (brigatinib)|Jaypirca(pirtobrutinib),matched,0,0,0,0,192.317
+27,regimen,zanubrutinib,Brukinsa,generic,claude_regex,unknown,,claude_regex,,matched,0,0,0,0,1594.265
+27,regimen,zanubrutinib,Brukinsa,generic,claude_pick,ambiguous,,claude_pick,Jaypirca(pirtobrutinib)|Quizartinib|imatinib|Alunbrig (brigatinib)|Lorbrena (lorlatinib),matched,0,0,0,0,1248.142
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,none,matched,ZANUBRUTINIB,none,,matched,0,0,1,0,0.002
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,catalog,unknown,,catalog,,matched,0,0,0,0,0.948
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,synonym,matched,Brukinsa,synonym,,matched,1,1,0,1,0.007
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,1.685
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,cascade,matched,Brukinsa,cascade:synonym,,matched,1,1,0,1,0.761
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,hypothesize_verify,matched,Brukinsa,hypothesize_verify:guess,Brukinsa,matched,1,1,0,1,2410.512
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,phonetic,unknown,,phonetic,,matched,0,0,0,0,6.902
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,regex,unknown,,regex,,matched,0,0,0,0,1.098
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,embed,unknown,,embed,Alunbrig (brigatinib)|Jaypirca(pirtobrutinib)|Quizartinib,matched,0,0,0,0,180.219
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,claude_regex,ambiguous,,claude_regex,Brukinsa|Brukinsa(SEQUOIA),matched,0,0,0,1,4206.805
+28,regimen,ZANUBRUTINIB,Brukinsa,generic caps,claude_pick,ambiguous,,claude_pick,Jaypirca(pirtobrutinib)|Quizartinib|imatinib|Alunbrig (brigatinib)|Lorbrena (lorlatinib),matched,0,0,0,0,2447.024
+29,regimen,zanu,Brukinsa,short generic,none,matched,zanu,none,,matched,0,0,1,0,0.002
+29,regimen,zanu,Brukinsa,short generic,catalog,unknown,,catalog,,matched,0,0,0,0,0.773
+29,regimen,zanu,Brukinsa,short generic,synonym,matched,Brukinsa,synonym,,matched,1,1,0,1,0.006
+29,regimen,zanu,Brukinsa,short generic,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,1.59
+29,regimen,zanu,Brukinsa,short generic,cascade,matched,Brukinsa,cascade:synonym,,matched,1,1,0,1,0.76
+29,regimen,zanu,Brukinsa,short generic,hypothesize_verify,matched,Brukinsa,hypothesize_verify:guess,Brukinsa,matched,1,1,0,1,3781.958
+29,regimen,zanu,Brukinsa,short generic,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.006
+29,regimen,zanu,Brukinsa,short generic,regex,unknown,,regex,,matched,0,0,0,0,1.188
+29,regimen,zanu,Brukinsa,short generic,embed,unknown,,embed,Zejula|Zejula(PRIMA)|Akynzeo IV,matched,0,0,0,0,244.91
+29,regimen,zanu,Brukinsa,short generic,claude_regex,unknown,,claude_regex,,matched,0,0,0,0,1782.187
+29,regimen,zanu,Brukinsa,short generic,claude_pick,ambiguous,,claude_pick,Ontruzant|Anktiva+BCG|Aucatzyl|Cyramza|Imfinzi+chemotherapy(AEGEAN),matched,0,0,0,0,1679.104
+30,indication,CLL,CLL,canonical control,none,matched,CLL,none,,matched,1,1,0,1,0.003
+30,indication,CLL,CLL,canonical control,catalog,matched,CLL,catalog,,matched,1,1,0,1,0.779
+30,indication,CLL,CLL,canonical control,synonym,matched,CLL,synonym,,matched,1,1,0,1,0.006
+30,indication,CLL,CLL,canonical control,fuzzy,matched,CLL,fuzzy,CLL,matched,1,1,0,1,0.329
+30,indication,CLL,CLL,canonical control,cascade,matched,CLL,cascade:synonym,,matched,1,1,0,1,0.143
+30,indication,CLL,CLL,canonical control,hypothesize_verify,matched,CLL,hypothesize_verify:guess,CLL,matched,1,1,0,1,2748.904
+30,indication,CLL,CLL,canonical control,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.01
+30,indication,CLL,CLL,canonical control,regex,matched,CLL,regex,CLL,matched,1,1,0,1,0.295
+30,indication,CLL,CLL,canonical control,embed,matched,CLL,embed,CLL|cHL|CML,matched,1,1,0,1,107.007
+30,indication,CLL,CLL,canonical control,claude_regex,matched,CLL,claude_regex,CLL,matched,1,1,0,1,1491.224
+30,indication,CLL,CLL,canonical control,claude_pick,matched,CLL,claude_pick,CLL|DLBCL|PMBCL|Basal Cell Carcinoma|ALL,matched,1,1,0,1,1122.387
+31,indication,cll,CLL,casefold,none,matched,cll,none,,matched,0,0,1,0,0.002
+31,indication,cll,CLL,casefold,catalog,matched,CLL,catalog,,matched,1,1,0,1,0.153
+31,indication,cll,CLL,casefold,synonym,matched,CLL,synonym,,matched,1,1,0,1,0.004
+31,indication,cll,CLL,casefold,fuzzy,matched,CLL,fuzzy,CLL,matched,1,1,0,1,0.326
+31,indication,cll,CLL,casefold,cascade,matched,CLL,cascade:synonym,,matched,1,1,0,1,0.172
+31,indication,cll,CLL,casefold,hypothesize_verify,matched,CLL,hypothesize_verify:guess,CLL,matched,1,1,0,1,2524.267
+31,indication,cll,CLL,casefold,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.006
+31,indication,cll,CLL,casefold,regex,matched,CLL,regex,CLL,matched,1,1,0,1,0.191
+31,indication,cll,CLL,casefold,embed,matched,CLL,embed,CLL|cHL|CML,matched,1,1,0,1,163.102
+31,indication,cll,CLL,casefold,claude_regex,matched,CLL,claude_regex,CLL,matched,1,1,0,1,2323.007
+31,indication,cll,CLL,casefold,claude_pick,matched,CLL,claude_pick,CLL|DLBCL|PMBCL|Basal Cell Carcinoma|ALL,matched,1,1,0,1,1181.131
+32,indication,CLL/SLL,CLL,june22,none,matched,CLL/SLL,none,,matched,0,0,1,0,0.006
+32,indication,CLL/SLL,CLL,june22,catalog,unknown,,catalog,,matched,0,0,0,0,0.392
+32,indication,CLL/SLL,CLL,june22,synonym,matched,CLL,synonym,,matched,1,1,0,1,0.012
+32,indication,CLL/SLL,CLL,june22,fuzzy,matched,CLL,fuzzy,CLL,matched,1,1,0,1,1.138
+32,indication,CLL/SLL,CLL,june22,cascade,matched,CLL,cascade:synonym,,matched,1,1,0,1,0.482
+32,indication,CLL/SLL,CLL,june22,hypothesize_verify,matched,CLL,hypothesize_verify:guess,CLL,matched,1,1,0,1,3286.69
+32,indication,CLL/SLL,CLL,june22,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.023
+32,indication,CLL/SLL,CLL,june22,regex,unknown,,regex,,matched,0,0,0,0,0.354
+32,indication,CLL/SLL,CLL,june22,embed,matched,CLL,embed,CLL|SCLC|CML,matched,1,1,0,1,94.706
+32,indication,CLL/SLL,CLL,june22,claude_regex,matched,CLL,claude_regex,CLL,matched,1,1,0,1,2386.858
+32,indication,CLL/SLL,CLL,june22,claude_pick,ambiguous,,claude_pick,CLL|ALL|cHL|CML|HCL,matched,0,0,0,1,1793.433
+33,indication,SLL,CLL,equivalence,none,matched,SLL,none,,matched,0,0,1,0,0.002
+33,indication,SLL,CLL,equivalence,catalog,unknown,,catalog,,matched,0,0,0,0,0.249
+33,indication,SLL,CLL,equivalence,synonym,matched,CLL,synonym,,matched,1,1,0,1,0.005
+33,indication,SLL,CLL,equivalence,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,0.43
+33,indication,SLL,CLL,equivalence,cascade,matched,CLL,cascade:synonym,,matched,1,1,0,1,0.144
+33,indication,SLL,CLL,equivalence,hypothesize_verify,matched,CLL,hypothesize_verify:guess,CLL,matched,1,1,0,1,2019.606
+33,indication,SLL,CLL,equivalence,phonetic,unknown,,phonetic,,matched,0,0,0,0,0.005
+33,indication,SLL,CLL,equivalence,regex,unknown,,regex,,matched,0,0,0,0,0.324
+33,indication,SLL,CLL,equivalence,embed,unknown,,embed,SCLC|ALL|CLL,matched,0,0,0,1,132.944
+33,indication,SLL,CLL,equivalence,claude_regex,unknown,,claude_regex,,matched,0,0,0,0,1532.014
+33,indication,SLL,CLL,equivalence,claude_pick,ambiguous,,claude_pick,Basal Cell Carcinoma|ALL|CLL|Follicular Lymphoma|Large B-cell Lymphoma,matched,0,0,0,1,1537.838
+34,indication,chronic lymphocytic leukemia,CLL,full name,none,matched,chronic lymphocytic leukemia,none,,matched,0,0,1,0,0.002
+34,indication,chronic lymphocytic leukemia,CLL,full name,catalog,unknown,,catalog,,matched,0,0,0,0,0.153
+34,indication,chronic lymphocytic leukemia,CLL,full name,synonym,matched,CLL,synonym,,matched,1,1,0,1,0.005
+34,indication,chronic lymphocytic leukemia,CLL,full name,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,0.414
+34,indication,chronic lymphocytic leukemia,CLL,full name,cascade,matched,CLL,cascade:synonym,,matched,1,1,0,1,0.14
+34,indication,chronic lymphocytic leukemia,CLL,full name,hypothesize_verify,ambiguous,,hypothesize_verify:guess,CLL,matched,0,0,0,1,2635.392
+34,indication,chronic lymphocytic leukemia,CLL,full name,phonetic,unknown,,phonetic,,matched,0,0,0,0,1.067
+34,indication,chronic lymphocytic leukemia,CLL,full name,regex,unknown,,regex,,matched,0,0,0,0,0.523
+34,indication,chronic lymphocytic leukemia,CLL,full name,embed,unknown,,embed,CLL|SCLC|Large B-cell Lymphoma,matched,0,0,0,1,148.847
+34,indication,chronic lymphocytic leukemia,CLL,full name,claude_regex,ambiguous,,claude_regex,CLL,matched,0,0,0,1,2257.791
+34,indication,chronic lymphocytic leukemia,CLL,full name,claude_pick,ambiguous,,claude_pick,mCRPC|NSCLC|PEComa|CRPC|Gastric,matched,0,0,0,0,1171.818
+35,indication,mantle cell lymphoma,,trap_oos_indication,none,matched,mantle cell lymphoma,none,,unknown,0,0,1,0,0.002
+35,indication,mantle cell lymphoma,,trap_oos_indication,catalog,unknown,,catalog,,unknown,1,1,0,1,0.149
+35,indication,mantle cell lymphoma,,trap_oos_indication,synonym,unknown,,synonym,,unknown,1,1,0,1,0.005
+35,indication,mantle cell lymphoma,,trap_oos_indication,fuzzy,unknown,,fuzzy,Large B-cell Lymphoma|Follicular Lymphoma|Basal Cell Carcinoma,unknown,1,1,0,1,0.424
+35,indication,mantle cell lymphoma,,trap_oos_indication,cascade,ambiguous,,cascade:hypothesize_verify:guess,MCL,unknown,0,1,0,0,3582.938
+35,indication,mantle cell lymphoma,,trap_oos_indication,hypothesize_verify,ambiguous,,hypothesize_verify:guess,MCL,unknown,0,1,0,0,2359.246
+35,indication,mantle cell lymphoma,,trap_oos_indication,phonetic,unknown,,phonetic,,unknown,1,1,0,1,1.133
+35,indication,mantle cell lymphoma,,trap_oos_indication,regex,unknown,,regex,,unknown,1,1,0,1,0.692
+35,indication,mantle cell lymphoma,,trap_oos_indication,embed,unknown,,embed,MCL|Large B-cell Lymphoma|CML,unknown,1,1,0,1,110.582
+35,indication,mantle cell lymphoma,,trap_oos_indication,claude_regex,ambiguous,,claude_regex,MCL,unknown,0,1,0,0,1878.641
+35,indication,mantle cell lymphoma,,trap_oos_indication,claude_pick,ambiguous,,claude_pick,Large B-cell Lymphoma|PEComa|Follicular Lymphoma|ALL|cHL,unknown,0,1,0,0,1061.653
+36,book,Commercial,Commercial,canonical control,none,matched,Commercial,none,,matched,1,1,0,1,0.002
+36,book,Commercial,Commercial,canonical control,catalog,matched,Commercial,catalog,,matched,1,1,0,1,0.024
+36,book,Commercial,Commercial,canonical control,synonym,matched,Commercial,synonym,,matched,1,1,0,1,0.004
+36,book,Commercial,Commercial,canonical control,fuzzy,matched,Commercial,fuzzy,Commercial,matched,1,1,0,1,0.047
+36,book,Commercial,Commercial,canonical control,cascade,matched,Commercial,cascade:synonym,,matched,1,1,0,1,0.017
+36,book,Commercial,Commercial,canonical control,hypothesize_verify,matched,Commercial,hypothesize_verify:guess,Commercial,matched,1,1,0,1,2558.457
+36,book,Commercial,Commercial,canonical control,phonetic,matched,Commercial,phonetic,Commercial,matched,1,1,0,1,0.109
+36,book,Commercial,Commercial,canonical control,regex,matched,Commercial,regex,Commercial,matched,1,1,0,1,0.097
+36,book,Commercial,Commercial,canonical control,embed,matched,Commercial,embed,Commercial|MAC|Federal/Other,matched,1,1,0,1,1131.341
+36,book,Commercial,Commercial,canonical control,claude_regex,matched,Commercial,claude_regex,Commercial,matched,1,1,0,1,1622.738
+36,book,Commercial,Commercial,canonical control,claude_pick,matched,Commercial,claude_pick,Commercial|MAC|Medicaid|Medicare|Managed Medicaid,matched,1,1,0,1,1826.264
+37,book,commercial,Commercial,casefold,none,matched,commercial,none,,matched,0,0,1,0,0.002
+37,book,commercial,Commercial,casefold,catalog,matched,Commercial,catalog,,matched,1,1,0,1,0.025
+37,book,commercial,Commercial,casefold,synonym,matched,Commercial,synonym,,matched,1,1,0,1,0.03
+37,book,commercial,Commercial,casefold,fuzzy,matched,Commercial,fuzzy,Commercial,matched,1,1,0,1,0.054
+37,book,commercial,Commercial,casefold,cascade,matched,Commercial,cascade:synonym,,matched,1,1,0,1,0.019
+37,book,commercial,Commercial,casefold,hypothesize_verify,matched,Commercial,hypothesize_verify:guess,Commercial,matched,1,1,0,1,2083.589
+37,book,commercial,Commercial,casefold,phonetic,matched,Commercial,phonetic,Commercial,matched,1,1,0,1,0.195
+37,book,commercial,Commercial,casefold,regex,matched,Commercial,regex,Commercial,matched,1,1,0,1,0.042
+37,book,commercial,Commercial,casefold,embed,matched,Commercial,embed,Commercial|MAC|Federal/Other,matched,1,1,0,1,190.453
+37,book,commercial,Commercial,casefold,claude_regex,matched,Commercial,claude_regex,Commercial,matched,1,1,0,1,1231.88
+37,book,commercial,Commercial,casefold,claude_pick,matched,Commercial,claude_pick,Commercial|MAC|Medicaid|Medicare|Managed Medicaid,matched,1,1,0,1,1197.786
+38,book,Comercial,Commercial,typo,none,matched,Comercial,none,,matched,0,0,1,0,0.002
+38,book,Comercial,Commercial,typo,catalog,unknown,,catalog,,matched,0,0,0,0,0.081
+38,book,Comercial,Commercial,typo,synonym,matched,Commercial,synonym,,matched,1,1,0,1,0.016
+38,book,Comercial,Commercial,typo,fuzzy,unknown,,fuzzy,,matched,0,0,0,0,0.072
+38,book,Comercial,Commercial,typo,cascade,matched,Commercial,cascade:synonym,,matched,1,1,0,1,0.021
+38,book,Comercial,Commercial,typo,hypothesize_verify,matched,Commercial,hypothesize_verify:guess,Commercial,matched,1,1,0,1,2093.16
+38,book,Comercial,Commercial,typo,phonetic,matched,Commercial,phonetic,Commercial,matched,1,1,0,1,0.191
+38,book,Comercial,Commercial,typo,regex,unknown,,regex,,matched,0,0,0,0,0.258
+38,book,Comercial,Commercial,typo,embed,ambiguous,,embed,Commercial|MAC|Federal/Other,matched,0,0,0,1,81.227
+38,book,Comercial,Commercial,typo,claude_regex,ambiguous,,claude_regex,Commercial,matched,0,0,0,1,2023.314
+38,book,Comercial,Commercial,typo,claude_pick,matched,Commercial,claude_pick,Commercial|Medicaid|Medicare|MAC|Managed Medicaid,matched,1,1,0,1,1189.022
+39,book,Medicare,Medicare,canonical control,none,matched,Medicare,none,,matched,1,1,0,1,0.002
+39,book,Medicare,Medicare,canonical control,catalog,matched,Medicare,catalog,,matched,1,1,0,1,0.027
+39,book,Medicare,Medicare,canonical control,synonym,matched,Medicare,synonym,,matched,1,1,0,1,0.004
+39,book,Medicare,Medicare,canonical control,fuzzy,matched,Medicare,fuzzy,Medicare,matched,1,1,0,1,0.088
+39,book,Medicare,Medicare,canonical control,cascade,matched,Medicare,cascade:synonym,,matched,1,1,0,1,0.019
+39,book,Medicare,Medicare,canonical control,hypothesize_verify,matched,Medicare,hypothesize_verify:guess,Medicare,matched,1,1,0,1,2696.566
+39,book,Medicare,Medicare,canonical control,phonetic,matched,Medicare,phonetic,Medicare,matched,1,1,0,1,0.113
+39,book,Medicare,Medicare,canonical control,regex,matched,Medicare,regex,Medicare,matched,1,1,0,1,0.096
+39,book,Medicare,Medicare,canonical control,embed,matched,Medicare,embed,Medicare|Medicaid|Managed Medicaid,matched,1,1,0,1,143.717
+39,book,Medicare,Medicare,canonical control,claude_regex,matched,Medicare,claude_regex,Medicare,matched,1,1,0,1,1362.373
+39,book,Medicare,Medicare,canonical control,claude_pick,matched,Medicare,claude_pick,Medicare|Medicaid|FFS Medicaid|Managed Medicaid|Federal/Other,matched,1,1,0,1,1176.617
+40,book,medicare,Medicare,casefold,none,matched,medicare,none,,matched,0,0,1,0,0.002
+40,book,medicare,Medicare,casefold,catalog,matched,Medicare,catalog,,matched,1,1,0,1,0.024
+40,book,medicare,Medicare,casefold,synonym,matched,Medicare,synonym,,matched,1,1,0,1,0.004
+40,book,medicare,Medicare,casefold,fuzzy,matched,Medicare,fuzzy,Medicare,matched,1,1,0,1,0.052
+40,book,medicare,Medicare,casefold,cascade,matched,Medicare,cascade:synonym,,matched,1,1,0,1,0.018
+40,book,medicare,Medicare,casefold,hypothesize_verify,matched,Medicare,hypothesize_verify:guess,Medicare,matched,1,1,0,1,2648.603
+40,book,medicare,Medicare,casefold,phonetic,matched,Medicare,phonetic,Medicare,matched,1,1,0,1,0.226
+40,book,medicare,Medicare,casefold,regex,matched,Medicare,regex,Medicare,matched,1,1,0,1,0.043
+40,book,medicare,Medicare,casefold,embed,matched,Medicare,embed,Medicare|Medicaid|Managed Medicaid,matched,1,1,0,1,218.339
+40,book,medicare,Medicare,casefold,claude_regex,matched,Medicare,claude_regex,Medicare,matched,1,1,0,1,1389.153
+40,book,medicare,Medicare,casefold,claude_pick,matched,Medicare,claude_pick,Medicare|Medicaid|FFS Medicaid|Managed Medicaid|Federal/Other,matched,1,1,0,1,1360.358

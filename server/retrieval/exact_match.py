@@ -1,8 +1,14 @@
 from typing import Optional
+import os
 
 from bedrock import invoke_claude
 from db import get_db
+from entity_linking import link_slots
 import json
+
+# none | catalog | synonym | fuzzy | cascade | hypothesize_verify
+# cascade = synonym -> catalog -> LLM hypothesize+Mongo verify (production)
+ENTITY_LINK_METHOD = os.getenv("ENTITY_LINK_METHOD", "cascade")
 
 SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer question. Return ONLY valid JSON with no explanation or markdown.
 
@@ -31,7 +37,10 @@ def exact_match_retrieval(question: str, slots: Optional[dict] = None) -> list[d
     if slots is None:
         slots = extract_slots(question)
     print(f"[exact_match] slots: {slots}")
-    query = {k: v for k, v in slots.items() if v is not None}
+    linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+    if link_info:
+        print(f"[exact_match] linked ({ENTITY_LINK_METHOD}): {link_info}")
+    query = {k: v for k, v in linked.items() if v is not None}
     if not query:
         return []
     db = get_db()

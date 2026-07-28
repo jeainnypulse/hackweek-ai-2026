@@ -226,6 +226,23 @@ def find_closest_match(
     if cached and cached in candidates:
         return cached
 
+    # Shared synonym table + fuzzy (entity_linking) before Claude
+    try:
+        from entity_linking import resolve_fuzzy, resolve_synonym, set_catalogs
+
+        syn = resolve_synonym(field, user_value)
+        if syn.get("status") == "matched" and syn.get("value") in candidates:
+            _store_alias(field, user_value, syn["value"], filter_query)
+            return syn["value"]
+
+        set_catalogs({field: candidates})
+        fuzzy = resolve_fuzzy(field, user_value, {field: candidates})
+        if fuzzy.get("status") == "matched" and fuzzy.get("value") in candidates:
+            _store_alias(field, user_value, fuzzy["value"], filter_query)
+            return fuzzy["value"]
+    except Exception as exc:
+        print(f"[exact_match_conversational] entity_linking fallback skipped: {exc}")
+
     # Keep prompt size manageable for large organization lists
     candidate_text = "\n".join(f"- {c}" for c in candidates[:400])
     prompt = MATCH_PROMPT.format(

@@ -8,8 +8,11 @@ Called when retrieval_method = "exact_match_finetuned"
 import os
 import json
 from db import get_db
+from entity_linking import link_slots
 
 MODEL_PATH = os.getenv("FINETUNED_MODEL_PATH", "models/slot_extractor")
+# cascade = synonym -> catalog -> LLM hypothesize+Mongo verify (production)
+ENTITY_LINK_METHOD = os.getenv("ENTITY_LINK_METHOD", "cascade")
 
 _model = None
 _tokenizer = None
@@ -46,7 +49,10 @@ def extract_slots_finetuned(question: str) -> dict:
 def exact_match_finetuned_retrieval(question: str) -> list[dict]:
     slots = extract_slots_finetuned(question)
     print(f"[exact_match_finetuned] slots: {slots}")
-    query = {k: v for k, v in slots.items() if v is not None}
+    linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+    if link_info:
+        print(f"[exact_match_finetuned] linked ({ENTITY_LINK_METHOD}): {link_info}")
+    query = {k: v for k, v in linked.items() if v is not None}
     if not query:
         return []
     db = get_db()

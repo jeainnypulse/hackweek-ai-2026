@@ -15,10 +15,6 @@ from retrieval.exact_match_finetuned import (
     exact_match_finetuned_retrieval,
     extract_slots_finetuned,
 )
-from retrieval.exact_match_sp_1 import (
-    exact_match_sp_1_retrieval,
-    extract_slots as extract_slots_sp_1,
-)
 from retrieval.vector_search import vector_search_retrieval
 from synthesis import synthesize_answer
 
@@ -33,7 +29,6 @@ RETRIEVAL_HANDLERS = {
     "exact_match": exact_match_retrieval,
     "exact_match_conversational": exact_match_conversational_retrieval,
     "exact_match_finetuned": exact_match_finetuned_retrieval,
-    "exact_match_sp_1": exact_match_sp_1_retrieval,
     "vector_search": vector_search_retrieval,
     "combined": combined_retrieval,
 }
@@ -266,9 +261,6 @@ def run_eval_questions(questions: list[dict]) -> dict:
                 records = handler(item["question"], slots=actual_slots)
             elif method == "exact_match_conversational":
                 actual_slots = extract_slots_conversational(item["question"])
-                records = handler(item["question"], slots=actual_slots)
-            elif method == "exact_match_sp_1":
-                actual_slots = extract_slots_sp_1(item["question"])
                 records = handler(item["question"], slots=actual_slots)
             else:
                 actual_slots = extract_slots(item["question"])
