@@ -1,0 +1,9 @@
+id,question,notes,expected_organization,expected_regimen,expected_indication,expected_book
+1,"What is BCBS Michigan commercial access for Brukinsa in CLL?",june22_pinned,BlueCross BlueShield Michigan,Brukinsa,CLL,Commercial
+2,"What is Elevance commercial access for Brukinsa in CLL?",june22_pinned,Anthem (Elevance Health),Brukinsa,CLL,Commercial
+3,"What is Blue Cross Tennessee commercial access for Brukinsa in CLL?",june22_pinned,BlueCross BlueShield Tennessee,Brukinsa,CLL,Commercial
+4,"What is UHC commercial access for Brukinsa in CLL/SLL?",june22_colloquial,UnitedHealth Group,Brukinsa,CLL,Commercial
+5,"What is BCBS MI commercial access for zanubrutinib in CLL?",june22_colloquial,BlueCross BlueShield Michigan,Brukinsa,CLL,Commercial
+6,"What is Anthem commercial access for Brukinsa in CLL?",june22_preferred_canonical,Anthem (Elevance Health),Brukinsa,CLL,Commercial
+7,"What is Kaiser commercial access for Brukinsa in CLL?",control,Kaiser Permanente,Brukinsa,CLL,Commercial
+8,"What is Aetna Medicare access for Brukinsa in CLL?",control,Aetna,Brukinsa,CLL,Medicare

@@ -8,14 +8,9 @@ from typing import Optional, Union
 
 load_dotenv()
 
-from retrieval.exact_match import exact_match_retrieval
-from retrieval.exact_match_conversational import (
-    continue_conversation,
-    start_conversation,
-)
+from retrieval.exact_match import exact_match_turn
 from retrieval.exact_match_finetuned import exact_match_finetuned_retrieval
 from retrieval.vector_search import vector_search_retrieval
-from retrieval.combined import combined_retrieval
 from synthesis import synthesize_answer
 
 
@@ -36,10 +31,10 @@ app.add_middleware(
 
 class AskRequest(BaseModel):
     question: str = ""
-    retrieval_method: str = "exact_match_conversational"
+    retrieval_method: str = "exact_match_entity_linker"
     skip_log: bool = False
     session_id: Optional[str] = None
-    action: Optional[str] = None  # provide | cascade_options | submit_cascade
+    action: Optional[str] = None  # provide | skip
     value: Optional[Union[str, dict]] = None
 
 
@@ -55,18 +50,18 @@ class EvalQuestion(BaseModel):
     question: str
     expected_answer: str = ""
     citation: Optional[str] = None
-    retrieval_method: str = "exact_match_conversational"
+    retrieval_method: str = "exact_match_entity_linker"
 
 
 class EvalRunRequest(BaseModel):
     questions: list[EvalQuestion] = []
-    default_retrieval_method: str = "exact_match_conversational"
+    default_retrieval_method: str = "exact_match_entity_linker"
     csv_text: Optional[str] = None
 
 
 class EvalJobStartRequest(BaseModel):
     questions: list[EvalQuestion] = []
-    default_retrieval_method: str = "exact_match_conversational"
+    default_retrieval_method: str = "exact_match_entity_linker"
     csv_text: Optional[str] = None
 
 
@@ -100,7 +95,6 @@ def _finalize_ask(
     retrieval_method: str,
     skip_log: bool,
     confirmed_slots: Optional[dict] = None,
-    mongo_pipeline: Optional[str] = None,
 ) -> dict:
     answer, citations = synthesize_answer(question, records)
     result_id = str(uuid.uuid4())
@@ -118,7 +112,7 @@ def _finalize_ask(
                 "feedback": None,
             }
         )
-    result = {
+    return {
         "id": result_id,
         "status": "complete",
         "question": question,
@@ -129,20 +123,22 @@ def _finalize_ask(
         "confirmed_slots": confirmed_slots or {},
         "session_id": None,
     }
-    if mongo_pipeline:
-        result["mongo_pipeline"] = mongo_pipeline
-    return result
 
 
 @app.post("/api/ask")
 def ask(req: AskRequest):
     try:
-        # Multi-turn conversational exact match
-        if req.retrieval_method == "exact_match_conversational":
+        # Exact match + entity linker with optional clarification chips
+        # "exact_match" kept as deprecated alias
+        if req.retrieval_method in ("exact_match_entity_linker", "exact_match"):
             if req.session_id and req.action:
-                turn = continue_conversation(req.session_id, req.action, req.value)
+                turn = exact_match_turn(
+                    session_id=req.session_id,
+                    action=req.action,
+                    value=req.value,
+                )
             elif req.question.strip():
-                turn = start_conversation(req.question.strip())
+                turn = exact_match_turn(question=req.question.strip())
             else:
                 raise HTTPException(
                     status_code=400,
@@ -150,14 +146,16 @@ def ask(req: AskRequest):
                 )
 
             if turn.get("status") == "complete":
-                return _finalize_ask(
+                result = _finalize_ask(
                     turn.get("question") or req.question,
                     turn.get("records") or [],
                     req.retrieval_method,
                     req.skip_log,
                     confirmed_slots=turn.get("confirmed_slots"),
-                    mongo_pipeline=turn.get("mongo_pipeline"),
                 )
+                result["session_id"] = turn.get("session_id")
+                result["link_info"] = turn.get("link_info") or {}
+                return result
 
             return {
                 "id": None,
@@ -170,7 +168,7 @@ def ask(req: AskRequest):
                 "candidates": turn.get("candidates") or [],
                 "confirmed_slots": turn.get("confirmed_slots") or {},
                 "allow_skip": bool(turn.get("allow_skip")),
-                "cascade": turn.get("cascade"),
+                "link_info": turn.get("link_info") or {},
                 "answer": turn.get("message"),
                 "citations": [],
                 "retrieval_method": req.retrieval_method,
@@ -180,12 +178,8 @@ def ask(req: AskRequest):
         if not req.question.strip():
             raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-        if req.retrieval_method == "exact_match":
-            records = exact_match_retrieval(req.question)
-        elif req.retrieval_method == "vector_search":
+        if req.retrieval_method == "vector_search":
             records = vector_search_retrieval(req.question)
-        elif req.retrieval_method == "combined":
-            records = combined_retrieval(req.question)
         elif req.retrieval_method == "exact_match_finetuned":
             records = exact_match_finetuned_retrieval(req.question)
         else:

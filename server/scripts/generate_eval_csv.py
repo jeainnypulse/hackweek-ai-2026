@@ -62,7 +62,7 @@ def main(limit: int = 50) -> None:
                 "id": i + 1,
                 "question": question,
                 "expected_answer": "; ".join(expected_parts),
-                "retrieval_method": "exact_match",
+                "retrieval_method": "exact_match_entity_linker",
             }
         )
 

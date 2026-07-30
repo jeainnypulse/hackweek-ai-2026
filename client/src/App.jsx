@@ -78,7 +78,7 @@ function ConfirmedSlots({ slots, asList = false }) {
 export default function App() {
   const [tab, setTab] = useState('chat')
   const [question, setQuestion] = useState('')
-  const [method, setMethod] = useState('exact_match_conversational')
+  const [method, setMethod] = useState('exact_match_entity_linker')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -86,17 +86,10 @@ export default function App() {
   const [bgJob, setBgJob] = useState(null)
   const [sessionId, setSessionId] = useState(null)
   const [slotInput, setSlotInput] = useState('')
-  const [cascadeSelections, setCascadeSelections] = useState({
-    coverage: '',
-    population: '',
-    line: '',
-  })
-  const [pipelineCopied, setPipelineCopied] = useState(false)
   const downloadedJobRef = useRef(null)
 
   const awaitingInput = result?.status === 'needs_input' || result?.status === 'error'
-  const awaitingCascade = result?.status === 'needs_cascade_input'
-  const inConversation = Boolean(sessionId) && (awaitingInput || awaitingCascade)
+  const inConversation = Boolean(sessionId) && awaitingInput
 
   useEffect(() => {
     if (!bgJob?.id || bgJob.status !== 'running') return
@@ -172,24 +165,11 @@ export default function App() {
     }
   }
 
-  function syncCascadeSelections(data) {
-    const selections = data?.cascade?.selections || {}
-    setCascadeSelections({
-      coverage: selections.coverage || '',
-      population: selections.population || '',
-      line: selections.line || '',
-    })
-  }
-
   function applyAskResponse(data, originalQuestion) {
     setResult(data)
-    if (data.status === 'needs_cascade_input') {
-      syncCascadeSelections(data)
-    }
     if (data.status === 'complete') {
       setSessionId(null)
       setSlotInput('')
-      setCascadeSelections({ coverage: '', population: '', line: '' })
       setHistory(prev => [{ question: originalQuestion || data.question, method, result: data }, ...prev])
     } else if (data.session_id) {
       setSessionId(data.session_id)
@@ -203,8 +183,6 @@ export default function App() {
     setResult(null)
     setSessionId(null)
     setSlotInput('')
-    setCascadeSelections({ coverage: '', population: '', line: '' })
-    setPipelineCopied(false)
     const asked = question.trim()
     try {
       const res = await fetch('/api/ask', {
@@ -259,50 +237,12 @@ export default function App() {
     await sendSessionAction('provide', slotInput.trim())
   }
 
-  async function refreshCascadeOptions(nextSelections) {
-    setCascadeSelections(nextSelections)
-    await sendSessionAction('cascade_options', nextSelections)
-  }
-
-  async function onCascadeChange(field, value) {
-    let next = { ...cascadeSelections, [field]: value }
-    if (field === 'coverage') {
-      next = { coverage: value, population: '', line: '' }
-    } else if (field === 'population') {
-      next = { ...next, line: '' }
-    }
-    await refreshCascadeOptions(next)
-  }
-
-  async function submitCascade() {
-    await sendSessionAction('submit_cascade', cascadeSelections)
-  }
-
-  function cascadeReady() {
-    const pending = result?.cascade?.pending_slots || []
-    if (pending.includes('coverage') && !cascadeSelections.coverage) return false
-    if (pending.includes('population') && !cascadeSelections.population) return false
-    if (pending.includes('line') && !cascadeSelections.line) return false
-    return pending.length > 0 || Boolean(cascadeSelections.coverage)
-  }
-
   async function submitFeedback(id, rating) {
     await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, rating }),
     })
-  }
-
-  async function copyMongoPipeline(pipeline) {
-    if (!pipeline) return
-    try {
-      await navigator.clipboard.writeText(pipeline)
-      setPipelineCopied(true)
-      setTimeout(() => setPipelineCopied(false), 2000)
-    } catch {
-      setError('Could not copy pipeline to clipboard')
-    }
   }
 
   return (
@@ -399,11 +339,7 @@ export default function App() {
               <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">
-                    {result.status === 'complete'
-                      ? 'Answer'
-                      : awaitingCascade
-                        ? 'Additional details'
-                        : 'Clarify slots'}
+                    {result.status === 'complete' ? 'Answer' : 'Clarify slots'}
                   </span>
                   <span className="text-xs text-gray-400">
                     {result.retrieval_method}
@@ -439,105 +375,6 @@ export default function App() {
                         <button onClick={() => submitFeedback(result.id, 'no')} className="text-xs px-3 py-1 rounded-md border border-gray-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors">👎 No</button>
                       </div>
                     )}
-                    {result.mongo_pipeline && (
-                      <div className="mt-4 pt-3 border-t border-gray-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-xs text-gray-400 uppercase tracking-wide">Mongo aggregate pipeline</p>
-                          <button
-                            type="button"
-                            onClick={() => copyMongoPipeline(result.mongo_pipeline)}
-                            className="text-xs px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-700 transition-colors"
-                          >
-                            {pipelineCopied ? 'Copied' : 'Copy'}
-                          </button>
-                        </div>
-                        <pre className="text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3 overflow-x-auto whitespace-pre font-mono">
-                          {result.mongo_pipeline}
-                        </pre>
-                      </div>
-                    )}
-                  </>
-                ) : awaitingCascade ? (
-                  <>
-                    <p className="text-sm font-medium text-gray-900 mb-2">Here's what I have confirmed</p>
-                    <ConfirmedSlots slots={result.confirmed_slots} asList />
-                    <p className="text-sm text-gray-600 mb-4 pt-3 border-t border-gray-100">
-                      I would need some additional information from you to give you an accurate response
-                    </p>
-                    <div className="space-y-3">
-                      {(result.cascade?.pending_slots || []).includes('coverage') && (
-                        <label className="block">
-                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coverage</span>
-                          <select
-                            value={cascadeSelections.coverage}
-                            onChange={e => onCascadeChange('coverage', e.target.value)}
-                            disabled={loading}
-                            className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-violet-300 disabled:opacity-50"
-                          >
-                            <option value="">Select coverage…</option>
-                            {(result.cascade?.options?.coverage || []).map(option => (
-                              <option key={option} value={option}>{option}</option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {(result.cascade?.pending_slots || []).includes('population') && (
-                        <label className="block">
-                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Subtype</span>
-                          <select
-                            value={cascadeSelections.population}
-                            onChange={e => onCascadeChange('population', e.target.value)}
-                            disabled={loading || !cascadeSelections.coverage}
-                            className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-violet-300 disabled:opacity-50"
-                          >
-                            <option value="">
-                              {cascadeSelections.coverage ? 'Select subtype…' : 'Select coverage first…'}
-                            </option>
-                            {(result.cascade?.options?.population || []).map(option => (
-                              <option key={option} value={option}>{option}</option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      {(result.cascade?.pending_slots || []).includes('line') && (
-                        <label className="block">
-                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line</span>
-                          <select
-                            value={cascadeSelections.line}
-                            onChange={e => onCascadeChange('line', e.target.value)}
-                            disabled={
-                              loading
-                              || !cascadeSelections.coverage
-                              || (
-                                (result.cascade?.pending_slots || []).includes('population')
-                                && !cascadeSelections.population
-                              )
-                            }
-                            className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none bg-white focus:border-violet-300 disabled:opacity-50"
-                          >
-                            <option value="">
-                              {!cascadeSelections.coverage
-                                ? 'Select coverage first…'
-                                : (result.cascade?.pending_slots || []).includes('population') && !cascadeSelections.population
-                                  ? 'Select subtype first…'
-                                  : 'Select line of therapy…'}
-                            </option>
-                            {(result.cascade?.options?.line || []).map(option => (
-                              <option key={option} value={option}>{option}</option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        onClick={submitCascade}
-                        disabled={loading || !cascadeReady()}
-                        className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg transition-colors"
-                      >
-                        {loading ? 'Looking up…' : 'Get answer'}
-                      </button>
-                    </div>
                   </>
                 ) : (
                   <>
@@ -594,6 +431,16 @@ export default function App() {
                             ))}
                           </div>
                         )}
+                        {result.allow_skip && (
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => sendSessionAction('skip', null)}
+                            className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-40"
+                          >
+                            Skip this field
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -603,7 +450,6 @@ export default function App() {
                           setSessionId(null)
                           setResult(null)
                           setSlotInput('')
-                          setCascadeSelections({ coverage: '', population: '', line: '' })
                         }}
                         className="mt-3 text-xs text-violet-600 hover:underline"
                       >

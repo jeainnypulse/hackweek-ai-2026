@@ -3,7 +3,7 @@ import { parseCsv } from './evalUtils'
 import { RETRIEVAL_METHODS } from './retrievalMethods'
 
 export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
-  const [method, setMethod] = useState('exact_match_conversational')
+  const [method, setMethod] = useState('exact_match_entity_linker')
   const [csvText, setCsvText] = useState('')
   const [fileName, setFileName] = useState('qa_pairs.csv')
   const [error, setError] = useState(null)

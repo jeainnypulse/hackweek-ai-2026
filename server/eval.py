@@ -5,12 +5,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from retrieval.combined import combined_retrieval
 from retrieval.exact_match import exact_match_retrieval, extract_slots
-from retrieval.exact_match_conversational import (
-    exact_match_conversational_retrieval,
-    extract_slots as extract_slots_conversational,
-)
 from retrieval.exact_match_finetuned import (
     exact_match_finetuned_retrieval,
     extract_slots_finetuned,
@@ -26,11 +21,11 @@ FALLBACK_CSV_PATH = (
 )
 
 RETRIEVAL_HANDLERS = {
+    "exact_match_entity_linker": exact_match_retrieval,
+    # Deprecated alias for older eval CSVs / API clients
     "exact_match": exact_match_retrieval,
-    "exact_match_conversational": exact_match_conversational_retrieval,
     "exact_match_finetuned": exact_match_finetuned_retrieval,
     "vector_search": vector_search_retrieval,
-    "combined": combined_retrieval,
 }
 
 
@@ -63,7 +58,9 @@ def normalize_row(row: dict, index: int) -> dict:
             (row.get("expected_slots") or "").strip()
         ),
         "citation": (row.get("citation") or "").strip(),
-        "retrieval_method": (row.get("retrieval_method") or "exact_match").strip(),
+        "retrieval_method": (
+            row.get("retrieval_method") or "exact_match_entity_linker"
+        ).strip(),
     }
 
 
@@ -228,7 +225,7 @@ def run_eval_questions(questions: list[dict]) -> dict:
     scored = 0
 
     for item in questions:
-        method = item.get("retrieval_method") or "exact_match"
+        method = item.get("retrieval_method") or "exact_match_entity_linker"
         handler = RETRIEVAL_HANDLERS.get(method)
         if not handler:
             results.append(
@@ -256,11 +253,8 @@ def run_eval_questions(questions: list[dict]) -> dict:
             if method == "exact_match_finetuned":
                 actual_slots = extract_slots_finetuned(item["question"])
                 records = handler(item["question"], slots=actual_slots)
-            elif method == "exact_match":
+            elif method in ("exact_match_entity_linker", "exact_match"):
                 actual_slots = extract_slots(item["question"])
-                records = handler(item["question"], slots=actual_slots)
-            elif method == "exact_match_conversational":
-                actual_slots = extract_slots_conversational(item["question"])
                 records = handler(item["question"], slots=actual_slots)
             else:
                 actual_slots = extract_slots(item["question"])

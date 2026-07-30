@@ -36,19 +36,9 @@ def synthesize_answer(question: str, records: list[dict]) -> tuple[str, list[str
             [],
         )
 
-    payer_records = [r for r in records if "chunk_type" not in r]
-    doc_chunks = [r for r in records if r.get("chunk_type") == "document"]
-
-    context_parts = []
-    if payer_records:
-        context_parts.append("PAYER DATA RECORDS:")
-        for r in payer_records:
-            context_parts.append(json.dumps(r, default=str))
-    if doc_chunks:
-        context_parts.append("\nDOCUMENT EXCERPTS (supporting context):")
-        for chunk in doc_chunks:
-            label = f"[{chunk.get('source_file', 'unknown')} — slide/page {chunk.get('slide_or_page', '?')}]"
-            context_parts.append(f"{label}\n{chunk.get('text', '')}")
+    context_parts = ["PAYER DATA RECORDS:"]
+    for r in records:
+        context_parts.append(json.dumps(r, default=str))
 
     context = "\n".join(context_parts)
     prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the access level and score directly.
@@ -61,7 +51,7 @@ Records:
     answer = clean_answer(invoke_claude(prompt, system=SYSTEM_PROMPT, max_tokens=150))
 
     citations = []
-    for r in payer_records:
+    for r in records:
         access = r.get("accessData") or {}
         parts = [
             p

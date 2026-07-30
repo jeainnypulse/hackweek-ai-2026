@@ -21,12 +21,13 @@ import json
 import math
 import re
 import time
-from functools import lru_cache
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SYNONYMS_PATH = DATA_DIR / "entity_synonyms.json"
+SYNONYMS_COLLECTION = "entitySynonyms"
 
 # Slot fields we attempt to link
 LINK_DIMENSIONS = ("organization", "regimen", "indication", "book")
@@ -73,6 +74,11 @@ _catalog_cache: dict[str, list[str]] = {}
 _catalog_loaded_at: float = 0.0
 CATALOG_TTL_SEC = 300.0
 
+_synonym_cache: dict[str, dict[str, str]] = {}
+_synonym_loaded_at: float = 0.0
+SYNONYM_TTL_SEC = 300.0
+_synonym_indexes_ready = False
+
 # dimension -> {canonical: embedding vector}
 _embed_cache: dict[str, dict[str, list[float]]] = {}
 EMBED_ACCEPT_THRESHOLD = 0.72
@@ -98,25 +104,137 @@ def _fuzzy_score(a: str, b: str) -> float:
         return SequenceMatcher(None, a, b).ratio() * 100.0
 
 
-@lru_cache(maxsize=1)
-def load_synonyms() -> dict[str, dict[str, str]]:
-    """
-    Returns {dimension: {normalized_alias: canonical}}.
-    """
-    if not SYNONYMS_PATH.exists():
-        return {d: {} for d in LINK_DIMENSIONS}
-    raw = json.loads(SYNONYMS_PATH.read_text())
-    out: dict[str, dict[str, str]] = {d: {} for d in LINK_DIMENSIONS}
+def _empty_synonym_map() -> dict[str, dict[str, str]]:
+    return {d: {} for d in LINK_DIMENSIONS}
+
+
+def load_synonyms_from_json(path: Path = SYNONYMS_PATH) -> dict[str, dict[str, str]]:
+    """Load seed synonyms from JSON file."""
+    out = _empty_synonym_map()
+    if not path.exists():
+        return out
+    raw = json.loads(path.read_text())
     for dimension, pairs in raw.items():
-        if dimension not in out:
-            out[dimension] = {}
+        out.setdefault(dimension, {})
         for alias, canonical in pairs.items():
             out[dimension][normalize_key(alias)] = canonical
     return out
 
 
+def ensure_synonym_indexes() -> None:
+    global _synonym_indexes_ready
+    if _synonym_indexes_ready:
+        return
+    from db import get_db
+
+    col = get_db()[SYNONYMS_COLLECTION]
+    col.create_index(
+        [("dimension", 1), ("alias_key", 1)],
+        unique=True,
+        name="dimension_alias_key_unique",
+    )
+    _synonym_indexes_ready = True
+
+
+def load_synonyms(force: bool = False) -> dict[str, dict[str, str]]:
+    """
+    Returns {dimension: {normalized_alias: canonical}}.
+
+    Prefers Mongo entitySynonyms; falls back to JSON seed if collection empty
+    or Mongo is unavailable.
+    """
+    global _synonym_cache, _synonym_loaded_at
+    now = time.time()
+    if (
+        not force
+        and _synonym_cache
+        and (now - _synonym_loaded_at) < SYNONYM_TTL_SEC
+    ):
+        return _synonym_cache
+
+    out = _empty_synonym_map()
+    try:
+        from db import get_db
+
+        ensure_synonym_indexes()
+        col = get_db()[SYNONYMS_COLLECTION]
+        docs = list(col.find({}, {"dimension": 1, "alias_key": 1, "canonical": 1}))
+        if docs:
+            for doc in docs:
+                dimension = doc.get("dimension")
+                alias_key = doc.get("alias_key")
+                canonical = doc.get("canonical")
+                if (
+                    dimension in out
+                    and isinstance(alias_key, str)
+                    and isinstance(canonical, str)
+                    and canonical.strip()
+                ):
+                    out[dimension][alias_key] = canonical
+            _synonym_cache = out
+            _synonym_loaded_at = now
+            return out
+    except Exception as exc:
+        print(f"[entity_linking] Mongo synonyms unavailable ({exc}); using JSON seed")
+
+    out = load_synonyms_from_json()
+    _synonym_cache = out
+    _synonym_loaded_at = now
+    return out
+
+
 def reload_synonyms() -> None:
-    load_synonyms.cache_clear()
+    global _synonym_cache, _synonym_loaded_at
+    _synonym_cache = {}
+    _synonym_loaded_at = 0.0
+    load_synonyms(force=True)
+
+
+def upsert_synonym(
+    dimension: str,
+    alias: str,
+    canonical: str,
+    *,
+    source: str = "user_confirm",
+) -> dict[str, str]:
+    """
+    Persist alias -> canonical in Mongo entitySynonyms and refresh cache.
+
+    Only call after explicit user confirmation (not silent hyp accepts).
+    """
+    if dimension not in LINK_DIMENSIONS:
+        raise ValueError(f"Unsupported synonym dimension: {dimension}")
+    alias_key = normalize_key(alias)
+    canonical = str(canonical).strip()
+    if not alias_key or not canonical:
+        raise ValueError("alias and canonical are required")
+
+    from db import get_db
+
+    ensure_synonym_indexes()
+    now = datetime.utcnow()
+    get_db()[SYNONYMS_COLLECTION].update_one(
+        {"dimension": dimension, "alias_key": alias_key},
+        {
+            "$set": {
+                "dimension": dimension,
+                "alias_key": alias_key,
+                "alias": str(alias).strip(),
+                "canonical": canonical,
+                "source": source,
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    # Hot-update cache so the next resolve sees the write immediately
+    global _synonym_cache, _synonym_loaded_at
+    if not _synonym_cache:
+        _synonym_cache = _empty_synonym_map()
+    _synonym_cache.setdefault(dimension, {})[alias_key] = canonical
+    _synonym_loaded_at = time.time()
+    return {"dimension": dimension, "alias_key": alias_key, "canonical": canonical}
 
 
 def load_catalogs_from_db(force: bool = False) -> dict[str, list[str]]:

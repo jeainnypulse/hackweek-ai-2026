@@ -1,7 +1,5 @@
 export const RETRIEVAL_METHODS = [
-  { value: "exact_match_conversational", label: "Exact Match (Conversational)" },
-  { value: "exact_match", label: "Exact Match" },
+  { value: "exact_match_entity_linker", label: "Exact Match + Entity Linker" },
   { value: "vector_search", label: "Vector Search" },
-  { value: "combined", label: "Combined (Mongo + Docs)" },
   { value: "exact_match_finetuned", label: "Exact Match (Fine-tuned)" },
 ];

@@ -8,9 +8,6 @@ from typing import Optional
 
 from eval import compare_eval_result
 from retrieval.exact_match import extract_slots
-from retrieval.exact_match_conversational import (
-    extract_slots as extract_slots_conversational,
-)
 from retrieval.exact_match_finetuned import extract_slots_finetuned
 
 
@@ -102,7 +99,7 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 job["status"] = "stopped"
                 break
 
-            method = item.get("retrieval_method") or "exact_match"
+            method = item.get("retrieval_method") or "exact_match_entity_linker"
             from eval import RETRIEVAL_HANDLERS
 
             handler = RETRIEVAL_HANDLERS.get(method)
@@ -129,11 +126,8 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                     if method == "exact_match_finetuned":
                         actual_slots = extract_slots_finetuned(item["question"])
                         records = handler(item["question"], slots=actual_slots)
-                    elif method == "exact_match":
+                    elif method in ("exact_match_entity_linker", "exact_match"):
                         actual_slots = extract_slots(item["question"])
-                        records = handler(item["question"], slots=actual_slots)
-                    elif method == "exact_match_conversational":
-                        actual_slots = extract_slots_conversational(item["question"])
                         records = handler(item["question"], slots=actual_slots)
                     else:
                         actual_slots = extract_slots(item["question"])
@@ -202,7 +196,7 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
 
 
 def start_eval_job(
-    questions: list[dict], default_retrieval_method: str = "exact_match"
+    questions: list[dict], default_retrieval_method: str = "exact_match_entity_linker"
 ) -> str:
     for question in questions:
         if not question.get("retrieval_method"):
