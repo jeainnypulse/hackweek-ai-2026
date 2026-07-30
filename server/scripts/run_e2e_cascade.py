@@ -193,7 +193,7 @@ def main() -> None:
             "## Failure buckets",
             "",
             "- `extract_miss:*` — slot extraction did not pull the field",
-            "- `link_ambiguous:*` / `link_unknown:*` — cascade needs clarify chips",
+            "- `link_ambiguous:*` / `link_unknown:*` — cascade needs dropdown clarify",
             "- `link_wrong:*` — linked but not preferred canonical",
             "- `empty_result` — query returned 0 Mongo docs",
             "",

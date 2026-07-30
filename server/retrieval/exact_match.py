@@ -5,6 +5,16 @@ import uuid
 from bedrock import invoke_claude
 from db import get_db
 from entity_linking import LINK_DIMENSIONS, link_slots, upsert_synonym
+from retrieval.cascade_clarify import (
+    CASCADE_SLOTS,
+    IDENTITY_SLOTS,
+    auto_confirm_sole_cascade_options,
+    build_cascade_state,
+    cascade_needed,
+    distinct_values,
+    filter_from_confirmed,
+    parse_selections,
+)
 import json
 
 # none | catalog | synonym | fuzzy | cascade | hypothesize_verify
@@ -27,7 +37,7 @@ Return format:
 
 Question: """
 
-# session_id -> clarify state for exact_match_entity_linker chips
+# session_id -> interactive clarify state
 _sessions: dict[str, dict[str, Any]] = {}
 
 
@@ -47,6 +57,46 @@ def _query_records(slots: dict) -> list[dict]:
     return records
 
 
+def _confirmed_view(session: dict) -> dict:
+    return {
+        k: v
+        for k, v in (session.get("linked") or {}).items()
+        if v is not None and v != ""
+    }
+
+
+def _auto_confirm_sole_identity(session: dict) -> None:
+    """If an unresolved link dimension has only one Mongo value left, take it."""
+    linked = session["linked"]
+    for dimension in LINK_DIMENSIONS:
+        info = session["link_info"].get(dimension) or {}
+        if info.get("status") not in ("ambiguous", "unknown"):
+            continue
+        if linked.get(dimension):
+            continue
+        filt = {
+            k: v
+            for k, v in linked.items()
+            if k in IDENTITY_SLOTS and k != dimension and v
+        }
+        options = distinct_values(dimension, filt)
+        cands = info.get("candidates") or []
+        if cands:
+            options = [o for o in options if o in cands] or options
+        if len(options) == 1:
+            pick = options[0]
+            linked[dimension] = pick
+            info = dict(info)
+            info["status"] = "matched"
+            info["value"] = pick
+            info["method"] = "auto_sole"
+            session["link_info"][dimension] = info
+            print(
+                f"[exact_match_entity_linker] auto-confirmed sole "
+                f"{dimension}={pick!r}"
+            )
+
+
 def _first_pending_link(link_info: dict) -> Optional[tuple[str, dict]]:
     """Prefer ambiguous-with-candidates, then unknown-with-candidates."""
     for status in ("ambiguous", "unknown"):
@@ -60,35 +110,127 @@ def _first_pending_link(link_info: dict) -> Optional[tuple[str, dict]]:
     return None
 
 
-def _clarify_response(session: dict) -> dict:
+def _scoped_candidates(session: dict, dimension: str, fallback: list[str]) -> list[str]:
+    filt = {
+        k: v
+        for k, v in session["linked"].items()
+        if k in IDENTITY_SLOTS and k != dimension and v
+    }
+    scoped = distinct_values(dimension, filt)
+    if not scoped:
+        return list(fallback)
+    if fallback:
+        overlap = [v for v in scoped if v in set(fallback)]
+        return overlap or scoped
+    return scoped
+
+
+def _linker_clarify_response(session: dict) -> dict:
+    _auto_confirm_sole_identity(session)
     pending = _first_pending_link(session["link_info"])
     if not pending:
-        return _complete_from_session(session)
+        return _after_identity_resolved(session)
 
     dimension, info = pending
     session["current_slot"] = dimension
     raw = info.get("raw") or session["slots"].get(dimension) or ""
+    candidates = _scoped_candidates(
+        session, dimension, list(info.get("candidates") or [])
+    )
+    # Sole option after scoping — auto-confirm and continue
+    if len(candidates) == 1:
+        pick = candidates[0]
+        session["linked"][dimension] = pick
+        info = dict(info)
+        info["status"] = "matched"
+        info["value"] = pick
+        info["method"] = "auto_sole"
+        session["link_info"][dimension] = info
+        print(
+            f"[exact_match_entity_linker] auto-confirmed sole "
+            f"{dimension}={pick!r}"
+        )
+        return _after_identity_resolved(session)
+
+    label = dimension.replace("_", " ")
     return {
         "status": "needs_input",
         "session_id": session["session_id"],
         "question": session["question"],
         "message": (
-            f"I found multiple possible matches for {dimension} "
-            f"({raw!r}). Please pick one:"
+            f"I couldn't uniquely resolve {label} ({raw!r}). "
+            f"Please select the correct value from the list:"
         ),
         "current_slot": dimension,
         "proposed_value": None,
-        "candidates": list(info.get("candidates") or [])[:20],
-        "confirmed_slots": dict(session["linked"]),
+        "candidates": candidates,
+        "input_mode": "dropdown",
+        "confirmed_slots": _confirmed_view(session),
         "allow_skip": True,
+        "cascade": None,
         "link_info": session["link_info"],
         "records": [],
     }
 
 
+def _present_cascade(session: dict, selections: Optional[dict] = None) -> dict:
+    confirmed = session["linked"]
+    selections = auto_confirm_sole_cascade_options(confirmed, selections)
+    cascade = build_cascade_state(confirmed, selections)
+
+    if not cascade["pending_slots"]:
+        for field in CASCADE_SLOTS:
+            if field not in confirmed:
+                confirmed[field] = None
+        return _complete_from_session(session)
+
+    session["current_slot"] = None
+    session["cascade"] = cascade
+    return {
+        "status": "needs_cascade_input",
+        "session_id": session["session_id"],
+        "question": session["question"],
+        "message": (
+            "I would need some additional information from you "
+            "to give you an accurate response"
+        ),
+        "current_slot": None,
+        "proposed_value": None,
+        "candidates": cascade["options"].get("coverage") or [],
+        "input_mode": "cascade",
+        "confirmed_slots": _confirmed_view(session),
+        "allow_skip": False,
+        "cascade": cascade,
+        "link_info": session["link_info"],
+        "records": [],
+    }
+
+
+def _after_identity_resolved(session: dict) -> dict:
+    """Apply extracted cascade slots, then dropdown-clarify if needed."""
+    slots = session.get("slots") or {}
+    linked = session["linked"]
+
+    # Prefill cascade fields from extraction when present
+    for field in CASCADE_SLOTS:
+        if linked.get(field):
+            continue
+        raw = slots.get(field)
+        if raw:
+            linked[field] = raw
+
+    if cascade_needed(linked):
+        prefill = {
+            field: linked.get(field)
+            for field in CASCADE_SLOTS
+            if linked.get(field)
+        }
+        return _present_cascade(session, prefill)
+    return _complete_from_session(session)
+
+
 def _complete_from_session(session: dict) -> dict:
     records = _query_records(session["linked"])
-    # Write back only after user confirm + successful retrieve
     if records and session.get("pending_writebacks"):
         for item in session["pending_writebacks"]:
             try:
@@ -111,9 +253,10 @@ def _complete_from_session(session: dict) -> dict:
         "session_id": session["session_id"],
         "question": session["question"],
         "records": records,
-        "confirmed_slots": dict(session["linked"]),
+        "confirmed_slots": _confirmed_view(session),
         "link_info": session["link_info"],
         "candidates": [],
+        "cascade": None,
         "message": None,
         "current_slot": None,
     }
@@ -124,10 +267,14 @@ def exact_match_retrieval(
     slots: Optional[dict] = None,
     *,
     clarify: bool = False,
-) -> list[dict]:
+    return_linked: bool = False,
+):
     """
     One-shot retrieve (eval / batch). When clarify=False (default), ignores
-    ambiguous linker chips and queries with best-effort linked slots.
+    interactive clarify prompts and queries with best-effort linked slots.
+
+    If return_linked=True, returns (records, linked_slots) where linked_slots
+    are the final canonical slots used for the Mongo query.
     """
     if slots is None:
         slots = extract_slots(question)
@@ -136,9 +283,11 @@ def exact_match_retrieval(
     if link_info:
         print(f"[exact_match_entity_linker] linked ({ENTITY_LINK_METHOD}): {link_info}")
     if clarify and _first_pending_link(link_info):
-        # Caller should use exact_match_turn for interactive clarify (entity linker)
         pass
-    return _query_records(linked)
+    records = _query_records(linked)
+    if return_linked:
+        return records, linked
+    return records
 
 
 def exact_match_turn(
@@ -148,11 +297,10 @@ def exact_match_turn(
     value: Optional[Any] = None,
 ) -> dict:
     """
-    Interactive exact_match_entity_linker with clarification chips.
-
-    - New question: extract -> link -> maybe needs_input
-    - action=provide: apply user pick for current_slot, queue synonym writeback
-    - action=skip: drop current_slot from query and continue
+    Interactive exact_match_entity_linker:
+      extract → entity link → identity dropdown if needed
+      → coverage/subtype/line cascade (auto-confirm sole options)
+      → query
     """
     if session_id and action:
         session = _sessions.get(session_id)
@@ -164,21 +312,83 @@ def exact_match_turn(
                 "candidates": [],
                 "records": [],
                 "confirmed_slots": {},
+                "cascade": None,
             }
+
+        action = (action or "").lower().strip()
+
+        if action == "cascade_options":
+            selections = parse_selections(value)
+            return _present_cascade(session, selections)
+
+        if action == "submit_cascade":
+            selections = parse_selections(value)
+            cascade = build_cascade_state(session["linked"], selections)
+            options = cascade["options"]
+            picked = cascade["selections"]
+
+            def _cascade_error(msg: str) -> dict:
+                session["cascade"] = cascade
+                return {
+                    "status": "needs_cascade_input",
+                    "session_id": session["session_id"],
+                    "question": session["question"],
+                    "message": msg,
+                    "current_slot": None,
+                    "candidates": options.get("coverage") or [],
+                    "confirmed_slots": _confirmed_view(session),
+                    "allow_skip": False,
+                    "cascade": cascade,
+                    "link_info": session["link_info"],
+                    "records": [],
+                }
+
+            coverage = picked.get("coverage")
+            if not session["linked"].get("coverage"):
+                if not coverage or coverage not in options["coverage"]:
+                    return _cascade_error("Please select a Coverage value.")
+                session["linked"]["coverage"] = coverage
+
+            pop_options = options["population"]
+            if "population" not in session["linked"]:
+                population = picked.get("population")
+                if pop_options:
+                    if not population or population not in pop_options:
+                        return _cascade_error(
+                            "Please select a Subtype for the chosen Coverage."
+                        )
+                    session["linked"]["population"] = population
+                else:
+                    session["linked"]["population"] = None
+
+            if "line" not in session["linked"]:
+                line = picked.get("line")
+                line_filter = filter_from_confirmed(session["linked"])
+                line_options = distinct_values("line", line_filter)
+                if line_options:
+                    if len(line_options) == 1:
+                        session["linked"]["line"] = line_options[0]
+                    elif not line or line not in line_options:
+                        return _cascade_error("Please select a Line of therapy.")
+                    else:
+                        session["linked"]["line"] = line
+                else:
+                    session["linked"]["line"] = None
+
+            return _complete_from_session(session)
 
         slot = session.get("current_slot")
         if action == "provide" and slot:
             pick = str(value).strip() if value is not None else ""
             if not pick:
                 return {
-                    **_clarify_response(session),
+                    **_linker_clarify_response(session),
                     "message": "Please choose a value.",
                 }
             raw = (session["link_info"].get(slot) or {}).get("raw") or session[
                 "slots"
             ].get(slot)
             session["linked"][slot] = pick
-            # Clear pending for this field
             info = session["link_info"].get(slot) or {}
             info["status"] = "matched"
             info["value"] = pick
@@ -188,14 +398,13 @@ def exact_match_turn(
                 session.setdefault("pending_writebacks", []).append(
                     {"dimension": slot, "alias": str(raw), "canonical": pick}
                 )
-            return _clarify_response(session)
+            return _linker_clarify_response(session)
 
         if action == "skip" and slot:
-            # Leave raw mention; mark as skipped so we don't re-ask
             info = session["link_info"].get(slot) or {}
             info["status"] = "skipped"
             session["link_info"][slot] = info
-            return _clarify_response(session)
+            return _linker_clarify_response(session)
 
         return {
             "status": "error",
@@ -204,6 +413,7 @@ def exact_match_turn(
             "candidates": [],
             "records": [],
             "confirmed_slots": session.get("linked") or {},
+            "cascade": session.get("cascade"),
         }
 
     q = question.strip()
@@ -214,6 +424,7 @@ def exact_match_turn(
             "candidates": [],
             "records": [],
             "confirmed_slots": {},
+            "cascade": None,
         }
 
     slots = extract_slots(q)
@@ -231,12 +442,11 @@ def exact_match_turn(
         "link_info": link_info,
         "pending_writebacks": [],
         "current_slot": None,
+        "cascade": None,
     }
     _sessions[sid] = session
 
-    if _first_pending_link(link_info):
-        return _clarify_response(session)
-    return _complete_from_session(session)
+    return _linker_clarify_response(session)
 
 
 def normalize_alias_different(alias: str, canonical: str) -> bool:

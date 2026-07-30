@@ -10,7 +10,7 @@ Methods:
   synonym              — curated alias table only
   fuzzy                — string similarity vs catalog
   cascade              — production: synonym -> catalog -> hypothesize+verify
-                         (-> fuzzy candidates only if still unresolved)
+                         (-> full-catalog dropdown clarify if still unresolved)
   hypothesize_verify   — LLM world-knowledge guesses, verified in catalog/Mongo
   phonetic / regex / embed / claude_* — bakeoff experiments
 """
@@ -512,13 +512,14 @@ def resolve_cascade(
 ) -> dict[str, Any]:
     """
     Production cascade (Cursor path productized):
-      synonym -> catalog -> hypothesize+Mongo-verify -> fuzzy chips only
+      synonym -> catalog -> hypothesize+Mongo-verify
+      -> full-catalog dropdown clarify (never fuzzy chips)
 
     Synonym runs first so curated aliases win over literal catalog strings
     (e.g. Mongo contains both "Anthem" and "Anthem (Elevance Health)").
 
-    LLM never auto-accepts without a catalog/Mongo hit. Fuzzy never
-    auto-accepts — at best it supplies ambiguous candidates for the UI.
+    LLM never auto-accepts without a catalog/Mongo hit. If still unresolved,
+    return ambiguous with the full dimension catalog for UI dropdown clarify.
     """
     catalogs = catalogs or load_catalogs_from_db()
 
@@ -545,24 +546,16 @@ def resolve_cascade(
     if r["status"] == "matched":
         r["method"] = "cascade:" + str(r.get("method", "hypothesize_verify"))
         return r
-    if r["status"] == "ambiguous":
-        r["method"] = "cascade:" + str(r.get("method", "hypothesize_verify"))
-        return r
 
-    r = resolve_fuzzy(dimension, mention, catalogs)
-    # Never auto-accept fuzzy in cascade (false accepts are unacceptable).
-    if r["status"] == "matched":
+    # Unresolved (hyp unknown/ambiguous): full catalog for dropdown clarify
+    values = sorted(catalogs.get(dimension) or [], key=lambda v: str(v).casefold())
+    if values:
         return _result(
             "ambiguous",
-            candidates=r.get("candidates") or ([r["value"]] if r.get("value") else []),
-            scores=r.get("scores"),
-            method="cascade:fuzzy",
+            candidates=values,
+            method="cascade:clarify",
         )
-    if r["status"] == "ambiguous":
-        r["method"] = "cascade:fuzzy"
-        return r
-    r["method"] = "cascade"
-    return r
+    return _result("unknown", method="cascade")
 
 
 def _soundex(word: str) -> str:

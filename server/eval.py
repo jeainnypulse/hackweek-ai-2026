@@ -6,10 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from retrieval.exact_match import exact_match_retrieval, extract_slots
-from retrieval.exact_match_finetuned import (
-    exact_match_finetuned_retrieval,
-    extract_slots_finetuned,
-)
+from retrieval.exact_match_finetuned import exact_match_finetuned_retrieval
 from retrieval.vector_search import vector_search_retrieval
 from synthesis import synthesize_answer
 
@@ -193,16 +190,107 @@ def compare_slots(expected_slots: Optional[dict], actual_slots: Optional[dict]) 
     }
 
 
-def compare_eval_result(
-    item: dict, actual_answer: str, actual_slots: Optional[dict]
+def compare_records_to_expected_slots(
+    records: Optional[list], expected_slots: Optional[dict]
 ) -> dict:
+    """
+    Strict key check: every retrieved record must match all non-null gold slots.
+    If gold has slots but nothing was retrieved, that is a failure.
+    """
+    if not expected_slots:
+        return {
+            "score": None,
+            "match": None,
+            "checked_fields": [],
+            "mismatched_records": [],
+        }
+
+    checked_fields = [
+        field
+        for field in SLOT_FIELDS
+        if normalize_slot_value(expected_slots.get(field)) is not None
+    ]
+    if not checked_fields:
+        return {
+            "score": None,
+            "match": None,
+            "checked_fields": [],
+            "mismatched_records": [],
+        }
+
+    if not records:
+        return {
+            "score": 0.0,
+            "match": False,
+            "checked_fields": checked_fields,
+            "mismatched_records": [
+                {"index": None, "reason": "no_records_retrieved"}
+            ],
+        }
+
+    mismatched_records = []
+    for index, record in enumerate(records):
+        field_mismatches = []
+        for field in checked_fields:
+            expected = normalize_slot_value(expected_slots.get(field))
+            actual = normalize_slot_value(record.get(field))
+            if actual != expected:
+                field_mismatches.append(
+                    {
+                        "field": field,
+                        "expected": expected_slots.get(field),
+                        "actual": record.get(field),
+                    }
+                )
+        if field_mismatches:
+            mismatched_records.append(
+                {"index": index, "mismatches": field_mismatches}
+            )
+
+    matched = len(records) - len(mismatched_records)
+    score = matched / len(records)
+    return {
+        "score": round(score, 2),
+        "match": len(mismatched_records) == 0,
+        "checked_fields": checked_fields,
+        "mismatched_records": mismatched_records,
+    }
+
+
+def compare_eval_result(
+    item: dict,
+    actual_answer: str,
+    actual_slots: Optional[dict],
+    records: Optional[list] = None,
+    *,
+    strict: bool = False,
+) -> dict:
+    """
+    Compare answer + slots. When strict=True (exact_match_entity_linker E2E):
+    - final linked slots must match every non-null expected slot
+    - every retrieved record must match those expected slot keys
+    - expected access (if present) must appear in the answer
+    """
     access = compare_answers(get_expected_access(item), actual_answer)
     slots = compare_slots(item.get("expected_slots"), actual_slots)
+    records_cmp = compare_records_to_expected_slots(
+        records, item.get("expected_slots")
+    )
 
     access_match = access.get("match")
     slots_match = slots.get("match")
+    records_match = records_cmp.get("match")
 
-    if access_match is None and slots_match is None:
+    if strict:
+        parts = []
+        if slots_match is not None:
+            parts.append(slots_match)
+        if records_match is not None:
+            parts.append(records_match)
+        if access_match is not None:
+            parts.append(access_match)
+        overall_match = all(parts) if parts else None
+    elif access_match is None and slots_match is None:
         overall_match = None
     elif slots_match is None:
         overall_match = access_match
@@ -215,7 +303,9 @@ def compare_eval_result(
         "match": overall_match,
         "access": access,
         "slots": slots,
+        "records": records_cmp,
         "actual_slots": actual_slots,
+        "strict": strict,
     }
 
 
@@ -250,17 +340,27 @@ def run_eval_questions(questions: list[dict]) -> dict:
             continue
 
         try:
-            if method == "exact_match_finetuned":
-                actual_slots = extract_slots_finetuned(item["question"])
-                records = handler(item["question"], slots=actual_slots)
-            elif method in ("exact_match_entity_linker", "exact_match"):
-                actual_slots = extract_slots(item["question"])
-                records = handler(item["question"], slots=actual_slots)
+            strict = method in (
+                "exact_match_entity_linker",
+                "exact_match",
+                "exact_match_finetuned",
+            )
+            if strict:
+                # Final linked query slots are the source of truth for E2E scoring
+                records, actual_slots = handler(
+                    item["question"], return_linked=True
+                )
             else:
                 actual_slots = extract_slots(item["question"])
                 records = handler(item["question"])
             actual_answer, citations = synthesize_answer(item["question"], records)
-            comparison = compare_eval_result(item, actual_answer, actual_slots)
+            comparison = compare_eval_result(
+                item,
+                actual_answer,
+                actual_slots,
+                records=records,
+                strict=strict,
+            )
             if comparison["match"] is True:
                 passed += 1
             if (

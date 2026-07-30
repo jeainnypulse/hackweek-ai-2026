@@ -7,6 +7,8 @@ Called when retrieval_method = "exact_match_finetuned"
 
 import os
 import json
+from typing import Optional
+
 from db import get_db
 from entity_linking import link_slots
 
@@ -46,16 +48,25 @@ def extract_slots_finetuned(question: str) -> dict:
     return json.loads(clean)
 
 
-def exact_match_finetuned_retrieval(question: str) -> list[dict]:
-    slots = extract_slots_finetuned(question)
+def exact_match_finetuned_retrieval(
+    question: str,
+    slots: Optional[dict] = None,
+    *,
+    return_linked: bool = False,
+):
+    if slots is None:
+        slots = extract_slots_finetuned(question)
     print(f"[exact_match_finetuned] slots: {slots}")
     linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
     if link_info:
         print(f"[exact_match_finetuned] linked ({ENTITY_LINK_METHOD}): {link_info}")
-    query = {k: v for k, v in linked.items() if v is not None}
+    query = {k: v for k, v in linked.items() if v is not None and v != ""}
     if not query:
-        return []
-    db = get_db()
-    records = list(db.payerLatestAccess.find(query, {"_id": 0}).limit(50))
+        records: list[dict] = []
+    else:
+        db = get_db()
+        records = list(db.payerLatestAccess.find(query, {"_id": 0}).limit(50))
     print(f"[exact_match_finetuned] {len(records)} records found")
+    if return_linked:
+        return records, linked
     return records

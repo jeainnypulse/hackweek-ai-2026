@@ -8,7 +8,6 @@ from typing import Optional
 
 from eval import compare_eval_result
 from retrieval.exact_match import extract_slots
-from retrieval.exact_match_finetuned import extract_slots_finetuned
 
 
 
@@ -34,6 +33,8 @@ def results_to_csv(results: list[dict]) -> str:
             "access_score",
             "slots_match",
             "slots_score",
+            "records_match",
+            "records_score",
             "records_retrieved",
             "error",
         ]
@@ -42,6 +43,7 @@ def results_to_csv(results: list[dict]) -> str:
         comparison = row.get("comparison") or {}
         access = comparison.get("access") or {}
         slots = comparison.get("slots") or {}
+        records_cmp = comparison.get("records") or {}
         writer.writerow(
             [
                 row.get("id", ""),
@@ -65,6 +67,8 @@ def results_to_csv(results: list[dict]) -> str:
                 access.get("score"),
                 slots.get("match"),
                 slots.get("score"),
+                records_cmp.get("match"),
+                records_cmp.get("score"),
                 row.get("records_retrieved", 0),
                 row.get("error") or "",
             ]
@@ -123,12 +127,15 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 }
             else:
                 try:
-                    if method == "exact_match_finetuned":
-                        actual_slots = extract_slots_finetuned(item["question"])
-                        records = handler(item["question"], slots=actual_slots)
-                    elif method in ("exact_match_entity_linker", "exact_match"):
-                        actual_slots = extract_slots(item["question"])
-                        records = handler(item["question"], slots=actual_slots)
+                    strict = method in (
+                        "exact_match_entity_linker",
+                        "exact_match",
+                        "exact_match_finetuned",
+                    )
+                    if strict:
+                        records, actual_slots = handler(
+                            item["question"], return_linked=True
+                        )
                     else:
                         actual_slots = extract_slots(item["question"])
                         records = handler(item["question"])
@@ -137,7 +144,13 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                     actual_answer, _citations = synthesize_answer(
                         item["question"], records
                     )
-                    comparison = compare_eval_result(item, actual_answer, actual_slots)
+                    comparison = compare_eval_result(
+                        item,
+                        actual_answer,
+                        actual_slots,
+                        records=records,
+                        strict=strict,
+                    )
                     if comparison["match"] is True:
                         passed += 1
                     access = comparison.get("access") or {}

@@ -34,7 +34,7 @@ class AskRequest(BaseModel):
     retrieval_method: str = "exact_match_entity_linker"
     skip_log: bool = False
     session_id: Optional[str] = None
-    action: Optional[str] = None  # provide | skip
+    action: Optional[str] = None  # provide | skip | cascade_options | submit_cascade
     value: Optional[Union[str, dict]] = None
 
 
@@ -128,7 +128,7 @@ def _finalize_ask(
 @app.post("/api/ask")
 def ask(req: AskRequest):
     try:
-        # Exact match + entity linker with optional clarification chips
+        # Exact match + entity linker with optional dropdown clarification
         # "exact_match" kept as deprecated alias
         if req.retrieval_method in ("exact_match_entity_linker", "exact_match"):
             if req.session_id and req.action:
@@ -168,6 +168,8 @@ def ask(req: AskRequest):
                 "candidates": turn.get("candidates") or [],
                 "confirmed_slots": turn.get("confirmed_slots") or {},
                 "allow_skip": bool(turn.get("allow_skip")),
+                "input_mode": turn.get("input_mode") or "dropdown",
+                "cascade": turn.get("cascade"),
                 "link_info": turn.get("link_info") or {},
                 "answer": turn.get("message"),
                 "citations": [],
