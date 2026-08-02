@@ -9,9 +9,11 @@ from typing import Optional, Union
 load_dotenv()
 
 from retrieval.exact_match import exact_match_turn
-from retrieval.exact_match_finetuned import exact_match_finetuned_retrieval
-from retrieval.vector_search import vector_search_retrieval
 from synthesis import synthesize_answer
+
+DEPRECATED_RETRIEVAL_METHODS = frozenset(
+    {"vector_search", "exact_match_finetuned"}
+)
 
 
 from db import get_db
@@ -81,14 +83,6 @@ def health_bedrock():
         raise HTTPException(status_code=503, detail=str(exc))
 
 
-@app.get("/api/health/vector-search")
-def health_vector_search():
-    from vector_index import get_vector_search_status
-
-    status = get_vector_search_status()
-    return status
-
-
 def _finalize_ask(
     question: str,
     records: list,
@@ -128,70 +122,67 @@ def _finalize_ask(
 @app.post("/api/ask")
 def ask(req: AskRequest):
     try:
-        # Exact match + entity linker with optional dropdown clarification
-        # "exact_match" kept as deprecated alias
-        if req.retrieval_method in ("exact_match_entity_linker", "exact_match"):
-            if req.session_id and req.action:
-                turn = exact_match_turn(
-                    session_id=req.session_id,
-                    action=req.action,
-                    value=req.value,
-                )
-            elif req.question.strip():
-                turn = exact_match_turn(question=req.question.strip())
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Question cannot be empty",
-                )
+        method = req.retrieval_method or "exact_match_entity_linker"
+        if method in DEPRECATED_RETRIEVAL_METHODS:
+            raise HTTPException(
+                status_code=410,
+                detail=(
+                    f"Retrieval method '{method}' is deprecated. "
+                    "Use exact_match_entity_linker."
+                ),
+            )
+        # "exact_match" kept as deprecated alias for older clients
+        if method not in ("exact_match_entity_linker", "exact_match"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown retrieval method: {method}",
+            )
 
-            if turn.get("status") == "complete":
-                result = _finalize_ask(
-                    turn.get("question") or req.question,
-                    turn.get("records") or [],
-                    req.retrieval_method,
-                    req.skip_log,
-                    confirmed_slots=turn.get("confirmed_slots"),
-                )
-                result["session_id"] = turn.get("session_id")
-                result["link_info"] = turn.get("link_info") or {}
-                return result
-
-            return {
-                "id": None,
-                "status": turn.get("status"),
-                "session_id": turn.get("session_id"),
-                "question": turn.get("question") or req.question,
-                "message": turn.get("message"),
-                "current_slot": turn.get("current_slot"),
-                "proposed_value": turn.get("proposed_value"),
-                "candidates": turn.get("candidates") or [],
-                "confirmed_slots": turn.get("confirmed_slots") or {},
-                "allow_skip": bool(turn.get("allow_skip")),
-                "input_mode": turn.get("input_mode") or "dropdown",
-                "cascade": turn.get("cascade"),
-                "link_info": turn.get("link_info") or {},
-                "answer": turn.get("message"),
-                "citations": [],
-                "retrieval_method": req.retrieval_method,
-                "records_retrieved": 0,
-            }
-
-        if not req.question.strip():
-            raise HTTPException(status_code=400, detail="Question cannot be empty")
-
-        if req.retrieval_method == "vector_search":
-            records = vector_search_retrieval(req.question)
-        elif req.retrieval_method == "exact_match_finetuned":
-            records = exact_match_finetuned_retrieval(req.question)
+        if req.session_id and req.action:
+            turn = exact_match_turn(
+                session_id=req.session_id,
+                action=req.action,
+                value=req.value,
+            )
+        elif req.question.strip():
+            turn = exact_match_turn(question=req.question.strip())
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown retrieval method: {req.retrieval_method}",
+                detail="Question cannot be empty",
             )
-        return _finalize_ask(
-            req.question, records, req.retrieval_method, req.skip_log
-        )
+
+        if turn.get("status") == "complete":
+            result = _finalize_ask(
+                turn.get("question") or req.question,
+                turn.get("records") or [],
+                method,
+                req.skip_log,
+                confirmed_slots=turn.get("confirmed_slots"),
+            )
+            result["session_id"] = turn.get("session_id")
+            result["link_info"] = turn.get("link_info") or {}
+            return result
+
+        return {
+            "id": None,
+            "status": turn.get("status"),
+            "session_id": turn.get("session_id"),
+            "question": turn.get("question") or req.question,
+            "message": turn.get("message"),
+            "current_slot": turn.get("current_slot"),
+            "proposed_value": turn.get("proposed_value"),
+            "candidates": turn.get("candidates") or [],
+            "confirmed_slots": turn.get("confirmed_slots") or {},
+            "allow_skip": bool(turn.get("allow_skip")),
+            "input_mode": turn.get("input_mode") or "dropdown",
+            "cascade": turn.get("cascade"),
+            "link_info": turn.get("link_info") or {},
+            "answer": turn.get("message"),
+            "citations": [],
+            "retrieval_method": method,
+            "records_retrieved": 0,
+        }
     except HTTPException:
         raise
     except Exception as exc:

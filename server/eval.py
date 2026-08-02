@@ -6,18 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from entity_linking import LINK_DIMENSIONS
-from retrieval.exact_match import (
-    clarify_needed,
-    exact_match_retrieval,
-    extract_and_link,
-    extract_slots,
-)
-from retrieval.exact_match_finetuned import (
-    exact_match_finetuned_retrieval,
-    extract_and_link_finetuned,
-)
-from retrieval.vector_search import vector_search_retrieval
-from synthesis import synthesize_answer
+from retrieval.exact_match import clarify_needed, extract_and_link
 
 EVAL_CSV_PATH = (
     Path(__file__).resolve().parent.parent / "client" / "public" / "qa_pairs.csv"
@@ -26,19 +15,14 @@ FALLBACK_CSV_PATH = (
     Path(__file__).resolve().parent.parent / "client" / "public" / "eval_questions.csv"
 )
 
-RETRIEVAL_HANDLERS = {
-    "exact_match_entity_linker": exact_match_retrieval,
-    # Deprecated alias for older eval CSVs / API clients
-    "exact_match": exact_match_retrieval,
-    "exact_match_finetuned": exact_match_finetuned_retrieval,
-    "vector_search": vector_search_retrieval,
-}
+DEPRECATED_RETRIEVAL_METHODS = frozenset(
+    {"vector_search", "exact_match_finetuned"}
+)
 
 LINKER_EVAL_METHODS = frozenset(
     {
         "exact_match_entity_linker",
         "exact_match",
-        "exact_match_finetuned",
     }
 )
 
@@ -403,8 +387,33 @@ def run_eval_questions(questions: list[dict]) -> dict:
 
     for item in questions:
         method = item.get("retrieval_method") or "exact_match_entity_linker"
-        handler = RETRIEVAL_HANDLERS.get(method)
-        if not handler and method not in LINKER_EVAL_METHODS:
+        if method in DEPRECATED_RETRIEVAL_METHODS:
+            results.append(
+                {
+                    **item,
+                    "actual_answer": "",
+                    "records_retrieved": 0,
+                    "comparison": {
+                        "match": None,
+                        "access": {"score": None, "match": None, "matched_terms": []},
+                        "slots": {
+                            "score": None,
+                            "match": None,
+                            "matched_fields": [],
+                            "mismatched_fields": [],
+                        },
+                        "actual_slots": None,
+                        "clarify_needed": None,
+                        "link_info": {},
+                    },
+                    "error": (
+                        f"Retrieval method '{method}' is deprecated. "
+                        "Use exact_match_entity_linker."
+                    ),
+                }
+            )
+            continue
+        if method not in LINKER_EVAL_METHODS:
             results.append(
                 {
                     **item,
@@ -429,29 +438,11 @@ def run_eval_questions(questions: list[dict]) -> dict:
             continue
 
         try:
-            if method in LINKER_EVAL_METHODS:
-                if method == "exact_match_finetuned":
-                    linked, link_info = extract_and_link_finetuned(item["question"])
-                else:
-                    linked, link_info = extract_and_link(item["question"])
-                comparison = compare_linker_eval_result(item, linked, link_info)
-                actual_answer = ""
-                citations = []
-                records_retrieved = 0
-            else:
-                actual_slots = extract_slots(item["question"])
-                records = handler(item["question"])
-                actual_answer, citations = synthesize_answer(
-                    item["question"], records
-                )
-                comparison = compare_eval_result(
-                    item,
-                    actual_answer,
-                    actual_slots,
-                    records=records,
-                    strict=False,
-                )
-                records_retrieved = len(records)
+            linked, link_info = extract_and_link(item["question"])
+            comparison = compare_linker_eval_result(item, linked, link_info)
+            actual_answer = ""
+            citations = []
+            records_retrieved = 0
 
             if comparison["match"] is True:
                 passed += 1

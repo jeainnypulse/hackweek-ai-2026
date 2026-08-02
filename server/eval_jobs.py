@@ -7,13 +7,11 @@ import uuid
 from typing import Optional
 
 from eval import (
+    DEPRECATED_RETRIEVAL_METHODS,
     LINKER_EVAL_METHODS,
-    RETRIEVAL_HANDLERS,
-    compare_eval_result,
     compare_linker_eval_result,
 )
-from retrieval.exact_match import extract_and_link, extract_slots
-from retrieval.exact_match_finetuned import extract_and_link_finetuned
+from retrieval.exact_match import extract_and_link
 
 
 _jobs: dict[str, dict] = {}
@@ -113,8 +111,30 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 break
 
             method = item.get("retrieval_method") or "exact_match_entity_linker"
-            handler = RETRIEVAL_HANDLERS.get(method)
-            if not handler and method not in LINKER_EVAL_METHODS:
+            if method in DEPRECATED_RETRIEVAL_METHODS:
+                row = {
+                    **item,
+                    "actual_answer": "",
+                    "records_retrieved": 0,
+                    "comparison": {
+                        "match": None,
+                        "access": {"score": None, "match": None, "matched_terms": []},
+                        "slots": {
+                            "score": None,
+                            "match": None,
+                            "matched_fields": [],
+                            "mismatched_fields": [],
+                        },
+                        "actual_slots": None,
+                        "clarify_needed": None,
+                        "link_info": {},
+                    },
+                    "error": (
+                        f"Retrieval method '{method}' is deprecated. "
+                        "Use exact_match_entity_linker."
+                    ),
+                }
+            elif method not in LINKER_EVAL_METHODS:
                 row = {
                     **item,
                     "actual_answer": "",
@@ -136,35 +156,8 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 }
             else:
                 try:
-                    if method in LINKER_EVAL_METHODS:
-                        if method == "exact_match_finetuned":
-                            linked, link_info = extract_and_link_finetuned(
-                                item["question"]
-                            )
-                        else:
-                            linked, link_info = extract_and_link(item["question"])
-                        comparison = compare_linker_eval_result(
-                            item, linked, link_info
-                        )
-                        actual_answer = ""
-                        records_retrieved = 0
-                    else:
-                        actual_slots = extract_slots(item["question"])
-                        records = handler(item["question"])
-                        from synthesis import synthesize_answer
-
-                        actual_answer, _citations = synthesize_answer(
-                            item["question"], records
-                        )
-                        comparison = compare_eval_result(
-                            item,
-                            actual_answer,
-                            actual_slots,
-                            records=records,
-                            strict=False,
-                        )
-                        records_retrieved = len(records)
-
+                    linked, link_info = extract_and_link(item["question"])
+                    comparison = compare_linker_eval_result(item, linked, link_info)
                     if comparison["match"] is True:
                         passed += 1
                     access = comparison.get("access") or {}
@@ -176,8 +169,8 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                         scored += 1
                     row = {
                         **item,
-                        "actual_answer": actual_answer,
-                        "records_retrieved": records_retrieved,
+                        "actual_answer": "",
+                        "records_retrieved": 0,
                         "comparison": comparison,
                         "error": None,
                     }

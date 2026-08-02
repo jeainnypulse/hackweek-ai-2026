@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import BatchEval from './BatchEval'
 import { downloadJobResults } from './evalUtils'
-import { RETRIEVAL_METHODS } from './retrievalMethods'
+
+const RETRIEVAL_METHOD = 'exact_match_entity_linker'
 
 const TABS = [
   { id: 'chat', label: 'Chat' },
@@ -78,7 +79,6 @@ function ConfirmedSlots({ slots, asList = false }) {
 export default function App() {
   const [tab, setTab] = useState('chat')
   const [question, setQuestion] = useState('')
-  const [method, setMethod] = useState('exact_match_entity_linker')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -129,7 +129,7 @@ export default function App() {
     }
   }, [bgJob?.id, bgJob?.status])
 
-  async function startBackgroundJob({ csvText, method: retrievalMethod }) {
+  async function startBackgroundJob({ csvText }) {
     const healthRes = await fetch('/api/health/bedrock')
     const healthData = await healthRes.json().catch(() => ({}))
     if (!healthRes.ok) {
@@ -141,7 +141,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         csv_text: csvText,
-        default_retrieval_method: retrievalMethod,
+        default_retrieval_method: RETRIEVAL_METHOD,
       }),
     })
     const data = await res.json()
@@ -189,7 +189,11 @@ export default function App() {
       setSessionId(null)
       setSlotInput('')
       setCascadeSelections({ coverage: '', population: '', line: '' })
-      setHistory(prev => [{ question: originalQuestion || data.question, method, result: data }, ...prev])
+      setHistory(prev => [{
+        question: originalQuestion || data.question,
+        method: data.retrieval_method || RETRIEVAL_METHOD,
+        result: data,
+      }, ...prev])
     } else if (data.session_id) {
       setSessionId(data.session_id)
     }
@@ -208,7 +212,7 @@ export default function App() {
       const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: asked, retrieval_method: method }),
+        body: JSON.stringify({ question: asked, retrieval_method: RETRIEVAL_METHOD }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -233,7 +237,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: result?.question || '',
-          retrieval_method: method,
+          retrieval_method: RETRIEVAL_METHOD,
           session_id: sessionId,
           action,
           value,
@@ -348,24 +352,7 @@ export default function App() {
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } }}
                 disabled={inConversation || loading}
               />
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Retrieval:</span>
-                  <select
-                    value={method}
-                    onChange={e => {
-                      setMethod(e.target.value)
-                      setSessionId(null)
-                      setResult(null)
-                    }}
-                    disabled={inConversation || loading}
-                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 outline-none bg-white disabled:opacity-50"
-                  >
-                    {RETRIEVAL_METHODS.map(m => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className="flex items-center justify-end mt-3 pt-3 border-t border-gray-100">
                 <button
                   onClick={ask}
                   disabled={loading || !question.trim() || inConversation}
