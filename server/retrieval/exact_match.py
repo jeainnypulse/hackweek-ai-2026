@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Optional
 import os
 import uuid
@@ -45,6 +47,36 @@ def extract_slots(question: str) -> dict:
     response = invoke_claude(SLOT_EXTRACTION_PROMPT + question)
     clean = response.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
+
+
+def extract_and_link(
+    question: str, slots: Optional[dict] = None
+) -> tuple[dict, dict]:
+    """
+    Extract slots then canonicalize via the entity linker (no Mongo retrieve).
+
+    Returns (linked_slots, link_info). Used by batch eval (linker-scoped scoring).
+    """
+    if slots is None:
+        slots = extract_slots(question)
+    print(f"[exact_match_entity_linker] slots: {slots}")
+    linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+    if link_info:
+        print(f"[exact_match_entity_linker] linked ({ENTITY_LINK_METHOD}): {link_info}")
+    return linked, link_info
+
+
+def clarify_needed(link_info: Optional[dict]) -> bool:
+    """True if any identity dimension is still ambiguous/unknown with candidates."""
+    if not link_info:
+        return False
+    for dimension in LINK_DIMENSIONS:
+        info = link_info.get(dimension) or {}
+        if info.get("status") in ("ambiguous", "unknown") and (
+            info.get("candidates") or []
+        ):
+            return True
+    return False
 
 
 def _query_records(slots: dict) -> list[dict]:

@@ -5,6 +5,8 @@ Standalone — does not share code with exact_match.py.
 Called when retrieval_method = "exact_match_finetuned"
 """
 
+from __future__ import annotations
+
 import os
 import json
 from typing import Optional
@@ -46,6 +48,19 @@ def extract_slots_finetuned(question: str) -> dict:
     predicted = tokenizer.decode(outputs[0], skip_special_tokens=True)
     clean = predicted.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
+
+
+def extract_and_link_finetuned(
+    question: str, slots: Optional[dict] = None
+) -> tuple:
+    """Extract (finetuned) + entity link; no Mongo retrieve. For batch eval."""
+    if slots is None:
+        slots = extract_slots_finetuned(question)
+    print(f"[exact_match_finetuned] slots: {slots}")
+    linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+    if link_info:
+        print(f"[exact_match_finetuned] linked ({ENTITY_LINK_METHOD}): {link_info}")
+    return linked, link_info
 
 
 def exact_match_finetuned_retrieval(

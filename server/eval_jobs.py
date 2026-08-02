@@ -6,9 +6,14 @@ import time
 import uuid
 from typing import Optional
 
-from eval import compare_eval_result
-from retrieval.exact_match import extract_slots
-
+from eval import (
+    LINKER_EVAL_METHODS,
+    RETRIEVAL_HANDLERS,
+    compare_eval_result,
+    compare_linker_eval_result,
+)
+from retrieval.exact_match import extract_and_link, extract_slots
+from retrieval.exact_match_finetuned import extract_and_link_finetuned
 
 
 _jobs: dict[str, dict] = {}
@@ -36,6 +41,8 @@ def results_to_csv(results: list[dict]) -> str:
             "records_match",
             "records_score",
             "records_retrieved",
+            "clarify_needed",
+            "strict",
             "error",
         ]
     )
@@ -70,6 +77,8 @@ def results_to_csv(results: list[dict]) -> str:
                 records_cmp.get("match"),
                 records_cmp.get("score"),
                 row.get("records_retrieved", 0),
+                comparison.get("clarify_needed"),
+                comparison.get("strict"),
                 row.get("error") or "",
             ]
         )
@@ -104,10 +113,8 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 break
 
             method = item.get("retrieval_method") or "exact_match_entity_linker"
-            from eval import RETRIEVAL_HANDLERS
-
             handler = RETRIEVAL_HANDLERS.get(method)
-            if not handler:
+            if not handler and method not in LINKER_EVAL_METHODS:
                 row = {
                     **item,
                     "actual_answer": "",
@@ -122,35 +129,42 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                             "mismatched_fields": [],
                         },
                         "actual_slots": None,
+                        "clarify_needed": None,
+                        "link_info": {},
                     },
                     "error": f"Unknown retrieval method: {method}",
                 }
             else:
                 try:
-                    strict = method in (
-                        "exact_match_entity_linker",
-                        "exact_match",
-                        "exact_match_finetuned",
-                    )
-                    if strict:
-                        records, actual_slots = handler(
-                            item["question"], return_linked=True
+                    if method in LINKER_EVAL_METHODS:
+                        if method == "exact_match_finetuned":
+                            linked, link_info = extract_and_link_finetuned(
+                                item["question"]
+                            )
+                        else:
+                            linked, link_info = extract_and_link(item["question"])
+                        comparison = compare_linker_eval_result(
+                            item, linked, link_info
                         )
+                        actual_answer = ""
+                        records_retrieved = 0
                     else:
                         actual_slots = extract_slots(item["question"])
                         records = handler(item["question"])
-                    from synthesis import synthesize_answer
+                        from synthesis import synthesize_answer
 
-                    actual_answer, _citations = synthesize_answer(
-                        item["question"], records
-                    )
-                    comparison = compare_eval_result(
-                        item,
-                        actual_answer,
-                        actual_slots,
-                        records=records,
-                        strict=strict,
-                    )
+                        actual_answer, _citations = synthesize_answer(
+                            item["question"], records
+                        )
+                        comparison = compare_eval_result(
+                            item,
+                            actual_answer,
+                            actual_slots,
+                            records=records,
+                            strict=False,
+                        )
+                        records_retrieved = len(records)
+
                     if comparison["match"] is True:
                         passed += 1
                     access = comparison.get("access") or {}
@@ -163,7 +177,7 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                     row = {
                         **item,
                         "actual_answer": actual_answer,
-                        "records_retrieved": len(records),
+                        "records_retrieved": records_retrieved,
                         "comparison": comparison,
                         "error": None,
                     }
@@ -186,6 +200,8 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                                 "mismatched_fields": [],
                             },
                             "actual_slots": None,
+                            "clarify_needed": None,
+                            "link_info": {},
                         },
                         "error": str(exc),
                     }

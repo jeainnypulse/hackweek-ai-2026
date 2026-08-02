@@ -14,6 +14,11 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
   const results = bgJob?.results || []
   const progress = bgJob?.progress || 0
   const questionCount = parseCsv(csvText).length
+  const linkerScoped = [
+    'exact_match_entity_linker',
+    'exact_match',
+    'exact_match_finetuned',
+  ].includes(method)
 
   useEffect(() => {
     fetch('/qa_pairs.csv')
@@ -69,6 +74,15 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
         <p className="text-sm text-gray-700 mb-3">
           Run all questions on the server in the background. Results auto-download as CSV when finished — you can switch tabs while it runs.
         </p>
+        {linkerScoped && (
+          <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
+            Exact Match + Entity Linker batch scores <strong>linked identity slots only</strong>
+            {' '}(organization, regimen, indication, book). It does not run clarify, retrieve, or access synthesis.
+            {' '}Rows with type <code className="font-mono">clarify_needed</code> or{' '}
+            <code className="font-mono">under_specific</code> pass when the linker flags clarification
+            needed, even if org/slots are not fully resolved.
+          </p>
+        )}
 
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <label className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 cursor-pointer hover:bg-gray-50">
@@ -92,7 +106,8 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
         </div>
 
         <p className="text-xs text-gray-400 mb-3">
-          CSV columns: id, type, question, expected_slots, expected_access, citation
+          CSV columns: id, type, question, expected_slots, expected_access, citation.
+          {linkerScoped ? ' Gold identity slots should be stated or aliased in the question.' : ''}
         </p>
 
         <div className="flex items-center gap-3">
@@ -127,7 +142,10 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
       {bgJob && bgJob.status !== 'running' && results.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
           <div className="flex items-center gap-6 text-sm">
-            <span><strong>{bgJob.passed}</strong> / {bgJob.total} passed (access + slots)</span>
+            <span>
+              <strong>{bgJob.passed}</strong> / {bgJob.total} passed
+              {linkerScoped ? ' (linked identity slots)' : ' (access + slots)'}
+            </span>
             <span className="text-gray-500">Pass rate: {((bgJob.pass_rate || 0) * 100).toFixed(0)}%</span>
             {bgJob.status === 'stopped' && <span className="text-amber-600">Stopped early</span>}
             {bgJob.status === 'completed' && <span className="text-green-600">Complete — CSV downloaded</span>}
@@ -142,8 +160,8 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
             <span>Type</span>
             <span>Question</span>
             <span>Overall</span>
-            <span>Access</span>
-            <span>Slots</span>
+            <span>{linkerScoped ? 'Slots' : 'Access'}</span>
+            <span>{linkerScoped ? 'Clarify' : 'Slots'}</span>
           </div>
           <div className="divide-y divide-gray-100">
             {results.map(row => {
@@ -151,6 +169,7 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
               const matched = row.comparison?.match
               const accessMatch = row.comparison?.access?.match
               const slotsMatch = row.comparison?.slots?.match
+              const clarifyNeeded = row.comparison?.clarify_needed
               const statusClass = (value) => {
                 if (row.error) return 'text-red-600'
                 if (value === true) return 'text-green-600'
@@ -163,6 +182,13 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
                 if (value === false) return 'Fail'
                 return '—'
               }
+              const midValue = linkerScoped ? slotsMatch : accessMatch
+              const rightLabel = linkerScoped
+                ? (row.error ? 'Error' : clarifyNeeded === true ? 'Yes' : clarifyNeeded === false ? 'No' : '—')
+                : statusLabel(slotsMatch)
+              const rightClass = linkerScoped
+                ? (row.error ? 'text-red-600' : clarifyNeeded ? 'text-amber-600' : 'text-gray-400')
+                : statusClass(slotsMatch)
               return (
                 <div key={row.id}>
                   <button
@@ -175,11 +201,11 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
                     <span className={`text-xs font-medium ${statusClass(matched)}`}>
                       {statusLabel(matched)}
                     </span>
-                    <span className={`text-xs font-medium ${statusClass(accessMatch)}`}>
-                      {statusLabel(accessMatch)}
+                    <span className={`text-xs font-medium ${statusClass(midValue)}`}>
+                      {statusLabel(midValue)}
                     </span>
-                    <span className={`text-xs font-medium ${statusClass(slotsMatch)}`}>
-                      {statusLabel(slotsMatch)}
+                    <span className={`text-xs font-medium ${rightClass}`}>
+                      {rightLabel}
                     </span>
                   </button>
                   {isOpen && (
@@ -198,25 +224,50 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
                       )}
                       {row.comparison?.actual_slots && (
                         <div>
-                          <p className="text-xs text-gray-400 mb-1">Extracted Slots</p>
+                          <p className="text-xs text-gray-400 mb-1">
+                            {linkerScoped ? 'Linked Slots' : 'Extracted Slots'}
+                          </p>
                           <p className="text-xs text-gray-500 font-mono">{JSON.stringify(row.comparison.actual_slots)}</p>
                         </div>
                       )}
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">Expected Access</p>
-                        <p className="text-sm text-gray-700">{row.expected_access || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">Bedrock Answer</p>
-                        <p className="text-sm text-gray-800">{row.actual_answer || '—'}</p>
-                      </div>
+                      {row.comparison?.link_info && Object.keys(row.comparison.link_info).length > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-400 mb-1">Link info</p>
+                          <p className="text-xs text-gray-500 font-mono whitespace-pre-wrap">
+                            {JSON.stringify(row.comparison.link_info, null, 2)}
+                          </p>
+                        </div>
+                      )}
+                      {!linkerScoped && (
+                        <>
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1">Expected Access</p>
+                            <p className="text-sm text-gray-700">{row.expected_access || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1">Bedrock Answer</p>
+                            <p className="text-sm text-gray-800">{row.actual_answer || '—'}</p>
+                          </div>
+                        </>
+                      )}
                       <div className="flex gap-4 text-xs text-gray-500">
-                        <span>Records: {row.records_retrieved}</span>
-                        {row.comparison?.access?.score != null && (
-                          <span>Access score: {(row.comparison.access.score * 100).toFixed(0)}%</span>
-                        )}
-                        {row.comparison?.slots?.score != null && (
-                          <span>Slots score: {(row.comparison.slots.score * 100).toFixed(0)}%</span>
+                        {linkerScoped ? (
+                          <>
+                            <span>Clarify needed: {clarifyNeeded ? 'yes' : 'no'}</span>
+                            {row.comparison?.slots?.score != null && (
+                              <span>Slots score: {(row.comparison.slots.score * 100).toFixed(0)}%</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span>Records: {row.records_retrieved}</span>
+                            {row.comparison?.access?.score != null && (
+                              <span>Access score: {(row.comparison.access.score * 100).toFixed(0)}%</span>
+                            )}
+                            {row.comparison?.slots?.score != null && (
+                              <span>Slots score: {(row.comparison.slots.score * 100).toFixed(0)}%</span>
+                            )}
+                          </>
                         )}
                       </div>
                       {row.error && (

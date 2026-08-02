@@ -5,8 +5,17 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from retrieval.exact_match import exact_match_retrieval, extract_slots
-from retrieval.exact_match_finetuned import exact_match_finetuned_retrieval
+from entity_linking import LINK_DIMENSIONS
+from retrieval.exact_match import (
+    clarify_needed,
+    exact_match_retrieval,
+    extract_and_link,
+    extract_slots,
+)
+from retrieval.exact_match_finetuned import (
+    exact_match_finetuned_retrieval,
+    extract_and_link_finetuned,
+)
 from retrieval.vector_search import vector_search_retrieval
 from synthesis import synthesize_answer
 
@@ -24,6 +33,35 @@ RETRIEVAL_HANDLERS = {
     "exact_match_finetuned": exact_match_finetuned_retrieval,
     "vector_search": vector_search_retrieval,
 }
+
+LINKER_EVAL_METHODS = frozenset(
+    {
+        "exact_match_entity_linker",
+        "exact_match",
+        "exact_match_finetuned",
+    }
+)
+
+# Identity fields scored for linker-scoped batch eval
+IDENTITY_SLOT_FIELDS = tuple(LINK_DIMENSIONS)
+
+# CSV type values that expect the linker to stop for clarification
+# (pass if clarify_needed=True; do not require full org/slot equality)
+EXPECT_CLARIFY_TYPES = frozenset({"clarify_needed", "under_specific"})
+
+
+def expects_clarify(item: dict) -> bool:
+    return (item.get("type") or "").strip().lower() in EXPECT_CLARIFY_TYPES
+
+SLOT_FIELDS = (
+    "regimen",
+    "indication",
+    "line",
+    "book",
+    "organization",
+    "coverage",
+    "population",
+)
 
 
 def parse_expected_slots(raw: str) -> Optional[dict]:
@@ -123,17 +161,6 @@ def compare_answers(expected: str, actual: str) -> dict:
     return compare_access_label(expected_access, actual_norm)
 
 
-SLOT_FIELDS = (
-    "regimen",
-    "indication",
-    "line",
-    "book",
-    "organization",
-    "coverage",
-    "population",
-)
-
-
 def normalize_slot_value(value) -> Optional[str]:
     if value is None:
         return None
@@ -143,7 +170,12 @@ def normalize_slot_value(value) -> Optional[str]:
     return text.lower()
 
 
-def compare_slots(expected_slots: Optional[dict], actual_slots: Optional[dict]) -> dict:
+def compare_slots(
+    expected_slots: Optional[dict],
+    actual_slots: Optional[dict],
+    *,
+    fields: tuple[str, ...] = SLOT_FIELDS,
+) -> dict:
     if not expected_slots:
         return {
             "score": None,
@@ -156,7 +188,7 @@ def compare_slots(expected_slots: Optional[dict], actual_slots: Optional[dict]) 
     mismatched_fields = []
     checked_fields = []
 
-    for field in SLOT_FIELDS:
+    for field in fields:
         expected = normalize_slot_value(expected_slots.get(field))
         if expected is None:
             continue
@@ -257,6 +289,59 @@ def compare_records_to_expected_slots(
     }
 
 
+def _skipped_access() -> dict:
+    return {"score": None, "match": None, "matched_terms": [], "skipped": True}
+
+
+def _skipped_records() -> dict:
+    return {
+        "score": None,
+        "match": None,
+        "checked_fields": [],
+        "mismatched_records": [],
+        "skipped": True,
+    }
+
+
+def compare_linker_eval_result(
+    item: dict,
+    linked_slots: Optional[dict],
+    link_info: Optional[dict] = None,
+) -> dict:
+    """
+    Linker-scoped scoring: identity linked slots vs gold only.
+    Does not score coverage/population/line, retrieve, or access.
+
+    For types designed to need clarification (clarify_needed, under_specific),
+    overall match is whether the linker flagged clarify_needed — not whether
+    unresolved slots equal the gold canonicals.
+    """
+    slots = compare_slots(
+        item.get("expected_slots"),
+        linked_slots,
+        fields=IDENTITY_SLOT_FIELDS,
+    )
+    needs_clarify = clarify_needed(link_info)
+    expect_clarify = expects_clarify(item)
+    if expect_clarify:
+        overall_match = needs_clarify is True
+        strict = "linker_clarify"
+    else:
+        overall_match = slots.get("match")
+        strict = "linker"
+    return {
+        "match": overall_match,
+        "access": _skipped_access(),
+        "slots": slots,
+        "records": _skipped_records(),
+        "actual_slots": linked_slots,
+        "link_info": link_info or {},
+        "clarify_needed": needs_clarify,
+        "expect_clarify": expect_clarify,
+        "strict": strict,
+    }
+
+
 def compare_eval_result(
     item: dict,
     actual_answer: str,
@@ -266,7 +351,7 @@ def compare_eval_result(
     strict: bool = False,
 ) -> dict:
     """
-    Compare answer + slots. When strict=True (exact_match_entity_linker E2E):
+    Compare answer + slots. When strict=True (legacy full E2E):
     - final linked slots must match every non-null expected slot
     - every retrieved record must match those expected slot keys
     - expected access (if present) must appear in the answer
@@ -305,6 +390,8 @@ def compare_eval_result(
         "slots": slots,
         "records": records_cmp,
         "actual_slots": actual_slots,
+        "clarify_needed": None,
+        "link_info": {},
         "strict": strict,
     }
 
@@ -317,7 +404,7 @@ def run_eval_questions(questions: list[dict]) -> dict:
     for item in questions:
         method = item.get("retrieval_method") or "exact_match_entity_linker"
         handler = RETRIEVAL_HANDLERS.get(method)
-        if not handler:
+        if not handler and method not in LINKER_EVAL_METHODS:
             results.append(
                 {
                     **item,
@@ -333,6 +420,8 @@ def run_eval_questions(questions: list[dict]) -> dict:
                             "mismatched_fields": [],
                         },
                         "actual_slots": None,
+                        "clarify_needed": None,
+                        "link_info": {},
                     },
                     "error": f"Unknown retrieval method: {method}",
                 }
@@ -340,40 +429,42 @@ def run_eval_questions(questions: list[dict]) -> dict:
             continue
 
         try:
-            strict = method in (
-                "exact_match_entity_linker",
-                "exact_match",
-                "exact_match_finetuned",
-            )
-            if strict:
-                # Final linked query slots are the source of truth for E2E scoring
-                records, actual_slots = handler(
-                    item["question"], return_linked=True
-                )
+            if method in LINKER_EVAL_METHODS:
+                if method == "exact_match_finetuned":
+                    linked, link_info = extract_and_link_finetuned(item["question"])
+                else:
+                    linked, link_info = extract_and_link(item["question"])
+                comparison = compare_linker_eval_result(item, linked, link_info)
+                actual_answer = ""
+                citations = []
+                records_retrieved = 0
             else:
                 actual_slots = extract_slots(item["question"])
                 records = handler(item["question"])
-            actual_answer, citations = synthesize_answer(item["question"], records)
-            comparison = compare_eval_result(
-                item,
-                actual_answer,
-                actual_slots,
-                records=records,
-                strict=strict,
-            )
+                actual_answer, citations = synthesize_answer(
+                    item["question"], records
+                )
+                comparison = compare_eval_result(
+                    item,
+                    actual_answer,
+                    actual_slots,
+                    records=records,
+                    strict=False,
+                )
+                records_retrieved = len(records)
+
             if comparison["match"] is True:
                 passed += 1
-            if (
-                comparison["access"].get("score") is not None
-                or comparison["slots"].get("score") is not None
-            ):
+            if comparison["slots"].get("score") is not None or (
+                comparison.get("access") or {}
+            ).get("score") is not None:
                 scored += 1
             results.append(
                 {
                     **item,
                     "actual_answer": actual_answer,
                     "citations": citations,
-                    "records_retrieved": len(records),
+                    "records_retrieved": records_retrieved,
                     "comparison": comparison,
                     "error": None,
                 }
@@ -394,6 +485,8 @@ def run_eval_questions(questions: list[dict]) -> dict:
                             "mismatched_fields": [],
                         },
                         "actual_slots": None,
+                        "clarify_needed": None,
+                        "link_info": {},
                     },
                     "error": str(exc),
                 }
