@@ -7,6 +7,7 @@ import uuid
 from bedrock import invoke_claude
 from db import get_db
 from entity_linking import LINK_DIMENSIONS, link_slots, upsert_synonym
+from permissions import scoped_query
 from retrieval.cascade_clarify import (
     CASCADE_SLOTS,
     IDENTITY_SLOTS,
@@ -84,7 +85,8 @@ def _query_records(slots: dict) -> list[dict]:
     if not query:
         return []
     db = get_db()
-    records = list(db.payerLatestAccess.find(query, {"_id": 0}).limit(50))
+    scoped = scoped_query(query)
+    records = list(db.payerLatestAccess.find(scoped, {"_id": 0}).limit(50))
     print(f"[exact_match_entity_linker] {len(records)} records found for {query}")
     return records
 

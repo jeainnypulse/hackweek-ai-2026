@@ -245,13 +245,16 @@ def load_catalogs_from_db(force: bool = False) -> dict[str, list[str]]:
         return _catalog_cache
 
     from db import get_db
+    from permissions import scoped_query
 
     db = get_db()
     col = db.payerLatestAccess
     catalogs: dict[str, list[str]] = {}
     for dimension in LINK_DIMENSIONS:
         values = [
-            v for v in col.distinct(dimension) if isinstance(v, str) and v.strip()
+            v
+            for v in col.distinct(dimension, scoped_query())
+            if isinstance(v, str) and v.strip()
         ]
         catalogs[dimension] = sorted(set(values), key=str.casefold)
     _catalog_cache = catalogs

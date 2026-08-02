@@ -32,6 +32,7 @@ os.environ.setdefault("ENTITY_LINK_METHOD", "cascade")
 from entity_linking import link_slots  # noqa: E402
 from retrieval.exact_match import ENTITY_LINK_METHOD, extract_slots  # noqa: E402
 from db import get_db  # noqa: E402
+from permissions import scoped_query  # noqa: E402
 
 DATA_DIR = SERVER_DIR / "data"
 DEFAULT_QUESTIONS = DATA_DIR / "june22_e2e_questions.csv"
@@ -122,7 +123,9 @@ def main() -> None:
         query = {k: v for k, v in linked.items() if v is not None and v != ""}
         n_records = 0
         if query:
-            n_records = get_db().payerLatestAccess.count_documents(query)
+            n_records = get_db().payerLatestAccess.count_documents(
+                scoped_query(query)
+            )
             # cap check similar to retrieve
             n_records = min(n_records, 50)
 

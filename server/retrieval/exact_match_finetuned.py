@@ -13,6 +13,7 @@ from typing import Optional
 
 from db import get_db
 from entity_linking import link_slots
+from permissions import scoped_query
 
 MODEL_PATH = os.getenv("FINETUNED_MODEL_PATH", "models/slot_extractor")
 # cascade = synonym -> catalog -> LLM hypothesize+Mongo verify (production)
@@ -80,7 +81,9 @@ def exact_match_finetuned_retrieval(
         records: list[dict] = []
     else:
         db = get_db()
-        records = list(db.payerLatestAccess.find(query, {"_id": 0}).limit(50))
+        records = list(
+            db.payerLatestAccess.find(scoped_query(query), {"_id": 0}).limit(50)
+        )
     print(f"[exact_match_finetuned] {len(records)} records found")
     if return_linked:
         return records, linked

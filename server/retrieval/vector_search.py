@@ -1,5 +1,6 @@
 from bedrock import get_embedding
 from db import get_db
+from permissions import permission_pipeline
 from vector_index import EMBEDDING_PATH, INDEX_NAME, ensure_vector_search_ready
 
 
@@ -8,7 +9,9 @@ def vector_search_retrieval(question: str, top_k: int = 10) -> list[dict]:
 
     embedding = get_embedding(question)
     db = get_db()
-    num_candidates = max(top_k * 10, 100)
+    # Oversample before permission $match — $vectorSearch must be first stage,
+    # and the Atlas index may not yet declare filter fields for pre-filter.
+    num_candidates = max(top_k * 50, 500)
     pipeline = [
         {
             "$vectorSearch": {
@@ -16,9 +19,11 @@ def vector_search_retrieval(question: str, top_k: int = 10) -> list[dict]:
                 "path": EMBEDDING_PATH,
                 "queryVector": embedding,
                 "numCandidates": num_candidates,
-                "limit": top_k,
+                "limit": max(top_k * 20, 100),
             }
         },
+        *permission_pipeline(),
+        {"$limit": top_k},
         {
             "$project": {
                 "_id": 0,

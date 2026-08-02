@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from db import get_db
+from permissions import scoped_query
 
 IDENTITY_SLOTS = ("regimen", "indication", "book", "organization")
 CASCADE_SLOTS = ("coverage", "population", "line")
@@ -29,7 +30,7 @@ def clean_slot_value(value) -> Optional[str]:
 
 def distinct_values(field: str, filter_query: dict) -> list[str]:
     db = get_db()
-    values = db.payerLatestAccess.distinct(field, filter_query)
+    values = db.payerLatestAccess.distinct(field, scoped_query(filter_query))
     cleaned = []
     for value in values:
         if value is None:
