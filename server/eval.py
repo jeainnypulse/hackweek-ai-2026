@@ -9,10 +9,13 @@ from entity_linking import LINK_DIMENSIONS
 from retrieval.exact_match import clarify_needed, extract_and_link
 
 EVAL_CSV_PATH = (
-    Path(__file__).resolve().parent.parent / "client" / "public" / "qa_pairs.csv"
+    Path(__file__).resolve().parent.parent
+    / "client"
+    / "public"
+    / "pulse_eval_orca_tregzi.csv"
 )
 FALLBACK_CSV_PATH = (
-    Path(__file__).resolve().parent.parent / "client" / "public" / "eval_questions.csv"
+    Path(__file__).resolve().parent / "data" / "pulse_eval_orca_tregzi.csv"
 )
 
 DEPRECATED_RETRIEVAL_METHODS = frozenset(
@@ -31,11 +34,100 @@ IDENTITY_SLOT_FIELDS = tuple(LINK_DIMENSIONS)
 
 # CSV type values that expect the linker to stop for clarification
 # (pass if clarify_needed=True; do not require full org/slot equality)
-EXPECT_CLARIFY_TYPES = frozenset({"clarify_needed", "under_specific"})
+EXPECT_CLARIFY_TYPES = frozenset(
+    {"clarify_needed", "under_specific", "clarify_should_trigger"}
+)
 
 
 def expects_clarify(item: dict) -> bool:
     return (item.get("type") or "").strip().lower() in EXPECT_CLARIFY_TYPES
+
+
+def cascade_stage_label(method: Optional[str], status: Optional[str] = None) -> str:
+    """Normalize linker method/status into a short cascade stage name."""
+    raw = (method or "").strip().lower()
+    if raw.startswith("cascade:"):
+        raw = raw[len("cascade:") :]
+    if raw in ("synonym",) or raw.startswith("synonym"):
+        return "synonym"
+    if raw in ("catalog",) or raw.startswith("catalog"):
+        return "catalog"
+    if "hypothesize" in raw or raw in ("hyp+verify", "hyp_verify"):
+        return "hyp+verify"
+    if raw in ("clarify",) or raw.startswith("clarify"):
+        return "clarify"
+    if status in ("ambiguous",) and not raw:
+        return "clarify"
+    if status in ("unknown",) or raw in ("", "cascade", "unknown"):
+        return "unknown"
+    return raw or "unknown"
+
+
+def summarize_link_diagnostics(
+    linked_slots: Optional[dict],
+    link_info: Optional[dict],
+    *,
+    expected_slots: Optional[dict] = None,
+    mismatched_fields: Optional[list] = None,
+) -> dict:
+    """Build per-row diagnostics for eval CSV export."""
+    info = link_info or {}
+    stages: dict[str, str] = {}
+    statuses: dict[str, str] = {}
+    candidates_by_dim: dict[str, list] = {}
+    for dimension in IDENTITY_SLOT_FIELDS:
+        dim_info = info.get(dimension) or {}
+        if not dim_info and not (linked_slots or {}).get(dimension):
+            continue
+        status = dim_info.get("status")
+        method = dim_info.get("method")
+        stages[dimension] = cascade_stage_label(method, status)
+        if status:
+            statuses[dimension] = status
+        cands = dim_info.get("candidates") or []
+        if cands:
+            # Cap huge catalog dumps for CSV readability
+            candidates_by_dim[dimension] = list(cands)[:40]
+
+    wrong: list[dict] = []
+    for item in mismatched_fields or []:
+        wrong.append(
+            {
+                "field": item.get("field"),
+                "expected": item.get("expected"),
+                "actual": item.get("actual"),
+                "stage": stages.get(item.get("field") or ""),
+                "raw": (info.get(item.get("field") or "") or {}).get("raw"),
+            }
+        )
+
+    # Also surface hyp+verify matches that are simply wrong vs gold even if
+    # compare_slots already listed them — keep one clear list for analysts.
+    if expected_slots and not wrong:
+        for field in IDENTITY_SLOT_FIELDS:
+            exp = normalize_slot_value((expected_slots or {}).get(field))
+            act = normalize_slot_value((linked_slots or {}).get(field))
+            if exp is not None and act is not None and exp != act:
+                wrong.append(
+                    {
+                        "field": field,
+                        "expected": expected_slots.get(field),
+                        "actual": (linked_slots or {}).get(field),
+                        "stage": stages.get(field),
+                        "raw": (info.get(field) or {}).get("raw"),
+                    }
+                )
+
+    return {
+        "cascade_stages": stages,
+        "cascade_statuses": statuses,
+        "clarify_candidates": candidates_by_dim,
+        "wrong_canonicals": wrong,
+        "actual_organization": (linked_slots or {}).get("organization"),
+        "actual_regimen": (linked_slots or {}).get("regimen"),
+        "actual_indication": (linked_slots or {}).get("indication"),
+        "actual_book": (linked_slots or {}).get("book"),
+    }
 
 SLOT_FIELDS = (
     "regimen",
@@ -71,12 +163,13 @@ def normalize_row(row: dict, index: int) -> dict:
     return {
         "id": row.get("id") or str(index + 1),
         "type": (row.get("type") or "").strip(),
+        "sub_type": (row.get("sub_type") or "").strip(),
         "question": question,
         "expected_access": get_expected_access(row),
         "expected_slots": parse_expected_slots(
             (row.get("expected_slots") or "").strip()
         ),
-        "citation": (row.get("citation") or "").strip(),
+        "citation": (row.get("citation") or row.get("eval_notes") or "").strip(),
         "retrieval_method": (
             row.get("retrieval_method") or "exact_match_entity_linker"
         ).strip(),
@@ -307,6 +400,12 @@ def compare_linker_eval_result(
     )
     needs_clarify = clarify_needed(link_info)
     expect_clarify = expects_clarify(item)
+    diagnostics = summarize_link_diagnostics(
+        linked_slots,
+        link_info,
+        expected_slots=item.get("expected_slots"),
+        mismatched_fields=slots.get("mismatched_fields") or [],
+    )
     if expect_clarify:
         overall_match = needs_clarify is True
         strict = "linker_clarify"
@@ -323,6 +422,7 @@ def compare_linker_eval_result(
         "clarify_needed": needs_clarify,
         "expect_clarify": expect_clarify,
         "strict": strict,
+        **diagnostics,
     }
 
 
@@ -446,9 +546,11 @@ def run_eval_questions(questions: list[dict]) -> dict:
 
             if comparison["match"] is True:
                 passed += 1
-            if comparison["slots"].get("score") is not None or (
-                comparison.get("access") or {}
-            ).get("score") is not None:
+            if (
+                comparison["slots"].get("score") is not None
+                or (comparison.get("access") or {}).get("score") is not None
+                or comparison.get("expect_clarify")
+            ):
                 scored += 1
             results.append(
                 {

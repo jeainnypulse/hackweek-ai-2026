@@ -203,12 +203,12 @@ def eval_questions():
     if EVAL_CSV_PATH.exists():
         return {
             "csv": EVAL_CSV_PATH.read_text(encoding="utf-8"),
-            "filename": "qa_pairs.csv",
+            "filename": EVAL_CSV_PATH.name,
         }
     if FALLBACK_CSV_PATH.exists():
         return {
             "csv": FALLBACK_CSV_PATH.read_text(encoding="utf-8"),
-            "filename": "eval_questions.csv",
+            "filename": FALLBACK_CSV_PATH.name,
         }
     raise HTTPException(status_code=404, detail="No eval CSV found")
 

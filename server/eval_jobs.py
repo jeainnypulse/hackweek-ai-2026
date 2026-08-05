@@ -4,7 +4,7 @@ import json
 import threading
 import time
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from eval import (
     DEPRECATED_RETRIEVAL_METHODS,
@@ -18,6 +18,12 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
 
+def _json_cell(value: Any) -> str:
+    if value is None or value == "" or value == {} or value == []:
+        return ""
+    return json.dumps(value, ensure_ascii=False)
+
+
 def results_to_csv(results: list[dict]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
@@ -25,59 +31,63 @@ def results_to_csv(results: list[dict]) -> str:
         [
             "id",
             "type",
+            "sub_type",
             "question",
-            "expected_access",
             "expected_slots",
-            "citation",
-            "actual_answer",
             "actual_slots",
+            "actual_organization",
+            "actual_regimen",
+            "actual_indication",
+            "actual_book",
+            "cascade_stages",
+            "cascade_statuses",
+            "clarify_fired",
+            "clarify_candidates",
+            "wrong_canonicals",
             "match",
-            "access_match",
-            "access_score",
             "slots_match",
             "slots_score",
-            "records_match",
-            "records_score",
-            "records_retrieved",
-            "clarify_needed",
-            "strict",
+            "expect_clarify",
+            "citation",
             "error",
+            "link_info",
         ]
     )
     for row in results:
         comparison = row.get("comparison") or {}
-        access = comparison.get("access") or {}
         slots = comparison.get("slots") or {}
-        records_cmp = comparison.get("records") or {}
         writer.writerow(
             [
                 row.get("id", ""),
                 row.get("type", ""),
+                row.get("sub_type", ""),
                 row.get("question", ""),
-                row.get("expected_access", ""),
-                (
-                    json.dumps(row.get("expected_slots"))
-                    if row.get("expected_slots")
-                    else ""
-                ),
-                row.get("citation", ""),
-                row.get("actual_answer", ""),
-                (
-                    json.dumps(comparison.get("actual_slots"))
-                    if comparison.get("actual_slots")
-                    else ""
-                ),
+                _json_cell(row.get("expected_slots")),
+                _json_cell(comparison.get("actual_slots")),
+                comparison.get("actual_organization")
+                or (comparison.get("actual_slots") or {}).get("organization")
+                or "",
+                comparison.get("actual_regimen")
+                or (comparison.get("actual_slots") or {}).get("regimen")
+                or "",
+                comparison.get("actual_indication")
+                or (comparison.get("actual_slots") or {}).get("indication")
+                or "",
+                comparison.get("actual_book")
+                or (comparison.get("actual_slots") or {}).get("book")
+                or "",
+                _json_cell(comparison.get("cascade_stages")),
+                _json_cell(comparison.get("cascade_statuses")),
+                comparison.get("clarify_needed"),
+                _json_cell(comparison.get("clarify_candidates")),
+                _json_cell(comparison.get("wrong_canonicals")),
                 comparison.get("match"),
-                access.get("match"),
-                access.get("score"),
                 slots.get("match"),
                 slots.get("score"),
-                records_cmp.get("match"),
-                records_cmp.get("score"),
-                row.get("records_retrieved", 0),
-                comparison.get("clarify_needed"),
-                comparison.get("strict"),
+                comparison.get("expect_clarify"),
+                row.get("citation", ""),
                 row.get("error") or "",
+                _json_cell(comparison.get("link_info")),
             ]
         )
     return output.getvalue()
@@ -100,7 +110,7 @@ def _job_snapshot(job: dict) -> dict:
 
 def _run_job(job_id: str, questions: list[dict]) -> None:
     job = _jobs[job_id]
-    results = []
+    results: list[dict] = []
     passed = 0
     scored = 0
 
@@ -165,6 +175,7 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                     if (
                         access.get("score") is not None
                         or slots.get("score") is not None
+                        or comparison.get("expect_clarify")
                     ):
                         scored += 1
                     row = {

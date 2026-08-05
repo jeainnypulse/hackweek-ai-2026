@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import time
 from datetime import datetime
@@ -28,6 +29,13 @@ from typing import Any, Optional
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SYNONYMS_PATH = DATA_DIR / "entity_synonyms.json"
 SYNONYMS_COLLECTION = "entitySynonyms"
+
+# Off by default so linker eval exercises catalog / hyp-verify without synonym shortcuts.
+USE_SYNONYM_TABLE = os.getenv("ENTITY_LINK_USE_SYNONYMS", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Slot fields we attempt to link
 LINK_DIMENSIONS = ("organization", "regimen", "indication", "book")
@@ -109,14 +117,26 @@ def _empty_synonym_map() -> dict[str, dict[str, str]]:
 
 
 def load_synonyms_from_json(path: Path = SYNONYMS_PATH) -> dict[str, dict[str, str]]:
-    """Load seed synonyms from JSON file."""
+    """Load seed synonyms from JSON file.
+
+    Supports flat ``{dimension: {alias: canonical}}`` or wrapped
+    ``{"synonyms": {...}, "_metadata": ...}`` shapes.
+    """
     out = _empty_synonym_map()
     if not path.exists():
         return out
     raw = json.loads(path.read_text())
+    if isinstance(raw.get("synonyms"), dict):
+        raw = raw["synonyms"]
     for dimension, pairs in raw.items():
+        if not isinstance(dimension, str) or dimension.startswith("_"):
+            continue
+        if not isinstance(pairs, dict):
+            continue
         out.setdefault(dimension, {})
         for alias, canonical in pairs.items():
+            if not isinstance(alias, str) or not isinstance(canonical, str):
+                continue
             out[dimension][normalize_key(alias)] = canonical
     return out
 
@@ -141,9 +161,14 @@ def load_synonyms(force: bool = False) -> dict[str, dict[str, str]]:
     Returns {dimension: {normalized_alias: canonical}}.
 
     Prefers Mongo entitySynonyms; falls back to JSON seed if collection empty
-    or Mongo is unavailable.
+    or Mongo is unavailable. Returns empty maps when USE_SYNONYM_TABLE is off.
     """
     global _synonym_cache, _synonym_loaded_at
+    if not USE_SYNONYM_TABLE:
+        _synonym_cache = _empty_synonym_map()
+        _synonym_loaded_at = time.time()
+        return _synonym_cache
+
     now = time.time()
     if (
         not force
@@ -238,23 +263,27 @@ def upsert_synonym(
 
 
 def load_catalogs_from_db(force: bool = False) -> dict[str, list[str]]:
-    """Load distinct canonical values from payerLatestAccess (cached)."""
+    """Load distinct canonical values from payerLatestAccess (cached).
+
+    Catalogs are intentionally unscoped by demo permissions. Linking only asks
+    whether a mention maps to one canonical string; permissions apply later at
+    retrieve time. Scoping catalogs here falsely marks valid canonicals
+    (e.g. NSCLC, Keytruda) as ambiguous when they are absent from the
+    permissioned slice.
+    """
     global _catalog_cache, _catalog_loaded_at
     now = time.time()
     if not force and _catalog_cache and (now - _catalog_loaded_at) < CATALOG_TTL_SEC:
         return _catalog_cache
 
     from db import get_db
-    from permissions import scoped_query
 
     db = get_db()
     col = db.payerLatestAccess
     catalogs: dict[str, list[str]] = {}
     for dimension in LINK_DIMENSIONS:
         values = [
-            v
-            for v in col.distinct(dimension, scoped_query())
-            if isinstance(v, str) and v.strip()
+            v for v in col.distinct(dimension) if isinstance(v, str) and v.strip()
         ]
         catalogs[dimension] = sorted(set(values), key=str.casefold)
     _catalog_cache = catalogs
@@ -293,6 +322,65 @@ def resolve_none(dimension: str, mention: str) -> dict[str, Any]:
     return _result("matched", value=mention, method="none")
 
 
+def _doc_count(dimension: str, value: str) -> int:
+    try:
+        from db import get_db
+
+        return int(get_db().payerLatestAccess.count_documents({dimension: value}))
+    except Exception:
+        return 0
+
+
+def _related_canonicals(
+    dimension: str,
+    value: str,
+    catalogs: dict[str, list[str]],
+) -> list[str]:
+    """Catalog values related to an exact hit (acronym / stub / parenthetical)."""
+    vkey = normalize_key(value)
+    if not vkey:
+        return []
+    related: list[str] = []
+    for cand in catalogs.get(dimension) or []:
+        if cand == value:
+            continue
+        ckey = normalize_key(cand)
+        initials = "".join(w[0] for w in ckey.split() if w and w[0].isalpha())
+        if initials == vkey:
+            related.append(cand)
+        elif vkey in ckey.split():
+            related.append(cand)
+        elif ckey.startswith(vkey + " ") or ckey.startswith(vkey + "("):
+            related.append(cand)
+    return related
+
+
+def _prefer_dominant_canonical(
+    dimension: str,
+    value: str,
+    catalogs: dict[str, list[str]],
+) -> Optional[str]:
+    """Upgrade low-count stubs (UPMC, Anthem) to the dominant related canonical."""
+    related = _related_canonicals(dimension, value, catalogs)
+    if not related:
+        return None
+    base_count = _doc_count(dimension, value)
+    best = value
+    best_count = base_count
+    for cand in related:
+        n = _doc_count(dimension, cand)
+        if n > best_count:
+            best, best_count = cand, n
+    if best == value:
+        return None
+    # Dominant if much more common than the stub hit
+    if best_count >= max(10, base_count * 5) or (
+        base_count <= 5 and best_count >= 50
+    ):
+        return best
+    return None
+
+
 def resolve_catalog(
     dimension: str,
     mention: str,
@@ -303,7 +391,11 @@ def resolve_catalog(
     key = normalize_key(mention)
     by_key = {normalize_key(v): v for v in values}
     if key in by_key:
-        return _result("matched", value=by_key[key], method="catalog")
+        value = by_key[key]
+        dominant = _prefer_dominant_canonical(dimension, value, catalogs)
+        if dominant:
+            return _result("matched", value=dominant, method="catalog:dominant")
+        return _result("matched", value=value, method="catalog")
     return _result("unknown", method="catalog")
 
 
@@ -458,19 +550,27 @@ Rules:
             verified.append(hit)
             seen.add(hit)
 
-    candidates = verified[:5] or None
     pick = _select_verified_canonical(mention, verified, confidence)
     if pick:
+        # Generic/alias → brand: if catalog has multiple formulations of that
+        # brand, clarify. Exact mention==canonical already matched via catalog.
+        family = _catalog_name_family(pick, catalogs, dimension)
+        if len(family) > 1:
+            return _result(
+                "ambiguous",
+                candidates=family,
+                method="hypothesize_verify",
+            )
         return _result(
             "matched",
             value=pick,
-            candidates=candidates,
+            candidates=verified[:5] or None,
             method="hypothesize_verify",
         )
     if verified:
         return _result(
             "ambiguous",
-            candidates=candidates,
+            candidates=verified[:5],
             method="hypothesize_verify",
         )
 
@@ -508,6 +608,33 @@ def _select_verified_canonical(
     return None
 
 
+def _catalog_name_family(
+    canonical: str,
+    catalogs: dict[str, list[str]],
+    dimension: str,
+) -> list[str]:
+    """Return catalog values that are the same base name or a labeled variant.
+
+    Examples for ``Keytruda``: Keytruda, Keytruda (IV), Keytruda Qlex, ...
+    Excludes combo regimens (``Keytruda & Alimta``, ``Opdivo+Yervoy``).
+    Used after hyp-verify maps a generic (pembrolizumab) to a brand so we can
+    clarify among formulations instead of auto-accepting one.
+    """
+    base = normalize_key(canonical)
+    if not base:
+        return []
+    family: list[str] = []
+    for value in catalogs.get(dimension) or []:
+        raw = str(value).strip()
+        # Combo ops on the raw string (normalize_key strips & / +).
+        if re.search(r"[&+]|\bplus\b|\bwith\b", raw, re.I):
+            continue
+        key = normalize_key(raw)
+        if key == base or key.startswith(base + " ") or key.startswith(base + "("):
+            family.append(raw)
+    return family
+
+
 def resolve_cascade(
     dimension: str,
     mention: str,
@@ -526,20 +653,23 @@ def resolve_cascade(
     """
     catalogs = catalogs or load_catalogs_from_db()
 
-    r = resolve_synonym(dimension, mention)
-    if r["status"] == "matched":
-        # Prefer catalog casing if synonym target exists in catalog
-        canon = r["value"]
-        cat = resolve_catalog(dimension, canon, catalogs)
-        if cat["status"] == "matched":
-            return _result(
-                "matched",
-                value=cat["value"],
-                method="cascade:synonym",
-            )
-        r["method"] = "cascade:synonym"
-        return r
+    if USE_SYNONYM_TABLE:
+        r = resolve_synonym(dimension, mention)
+        if r["status"] == "matched":
+            # Prefer catalog casing if synonym target exists in catalog
+            canon = r["value"]
+            cat = resolve_catalog(dimension, canon, catalogs)
+            if cat["status"] == "matched":
+                return _result(
+                    "matched",
+                    value=cat["value"],
+                    method="cascade:synonym",
+                )
+            r["method"] = "cascade:synonym"
+            return r
 
+    # Exact canonical hit → matched. Many DB records sharing that canonical
+    # is irrelevant; ambiguity is about distinct canonical strings only.
     r = resolve_catalog(dimension, mention, catalogs)
     if r["status"] == "matched":
         r["method"] = "cascade:catalog"
@@ -550,7 +680,16 @@ def resolve_cascade(
         r["method"] = "cascade:" + str(r.get("method", "hypothesize_verify"))
         return r
 
-    # Unresolved (hyp unknown/ambiguous): full catalog for dropdown clarify
+    # Hyp found multiple verified canonicals for this mention → clarify with
+    # those candidates (not the entire dimension catalog).
+    if r["status"] == "ambiguous" and r.get("candidates"):
+        return _result(
+            "ambiguous",
+            candidates=list(r["candidates"]),
+            method="cascade:clarify",
+        )
+
+    # Still unresolved: full catalog dropdown clarify
     values = sorted(catalogs.get(dimension) or [], key=lambda v: str(v).casefold())
     if values:
         return _result(
@@ -939,6 +1078,71 @@ def resolve(
     return fn(dimension, mention, catalogs)
 
 
+def _permissioned_distinct_for_slot(
+    dimension: str,
+    linked: dict,
+    *,
+    dimensions: tuple[str, ...] = LINK_DIMENSIONS,
+) -> list[str]:
+    """Permission-scoped distinct values for a slot under already-resolved identity.
+
+    Returns [] when nothing else is resolved (avoid dumping the full catalog).
+    """
+    filt = {
+        key: linked[key]
+        for key in dimensions
+        if key != dimension and linked.get(key)
+    }
+    if not filt:
+        return []
+    try:
+        from retrieval.cascade_clarify import distinct_values
+
+        return distinct_values(dimension, filt)
+    except Exception as exc:
+        print(f"[entity_linking] permissioned distinct({dimension}) failed: {exc}")
+        return []
+
+
+def _fill_missing_slots_from_permissioned_distinct(
+    linked: dict,
+    info: dict[str, dict],
+    dimensions: tuple[str, ...] = LINK_DIMENSIONS,
+) -> None:
+    """For null identity slots: clarify if >1 permissioned value, else auto-sole.
+
+    Mutates linked/info in place. Re-runs while auto-sole unlocks further slots.
+    """
+    progress = True
+    while progress:
+        progress = False
+        for dimension in dimensions:
+            if linked.get(dimension):
+                continue
+            if dimension in info:
+                # Extract tried this slot (matched/ambiguous/unknown) — don't override
+                continue
+            available = _permissioned_distinct_for_slot(
+                dimension, linked, dimensions=dimensions
+            )
+            if len(available) > 1:
+                info[dimension] = {
+                    "raw": None,
+                    "status": "ambiguous",
+                    "candidates": available,
+                    "method": "cascade:clarify",
+                }
+            elif len(available) == 1:
+                linked[dimension] = available[0]
+                info[dimension] = {
+                    "raw": None,
+                    "status": "matched",
+                    "value": available[0],
+                    "method": "cascade:auto_sole",
+                }
+                progress = True
+
+
 def link_slots(
     slots: dict,
     method: str = "cascade",
@@ -948,6 +1152,10 @@ def link_slots(
     """
     Canonicalize linkable slots. Returns (linked_slots, per_field_resolve_info).
     Ambiguous/unknown fields keep the original mention (exact find may miss).
+
+    After per-mention resolution: any still-null identity slot is filled from
+    permissioned distinct values under the resolved slots. Multiple values →
+    clarify; exactly one → auto-infer and proceed.
     """
     if method == "none":
         return dict(slots), {}
@@ -965,4 +1173,6 @@ def link_slots(
         info[dimension] = {"raw": raw, **result}
         if result["status"] == "matched" and result.get("value"):
             linked[dimension] = result["value"]
+
+    _fill_missing_slots_from_permissioned_distinct(linked, info, dimensions)
     return linked, info

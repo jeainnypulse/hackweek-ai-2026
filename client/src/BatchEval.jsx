@@ -3,7 +3,7 @@ import { parseCsv } from './evalUtils'
 
 export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
   const [csvText, setCsvText] = useState('')
-  const [fileName, setFileName] = useState('qa_pairs.csv')
+  const [fileName, setFileName] = useState('pulse_eval_orca_tregzi.csv')
   const [error, setError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
   const [starting, setStarting] = useState(false)
@@ -14,21 +14,16 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
   const questionCount = parseCsv(csvText).length
 
   useEffect(() => {
-    fetch('/qa_pairs.csv')
-      .then(res => res.text())
+    fetch('/pulse_eval_orca_tregzi.csv')
+      .then(res => {
+        if (!res.ok) throw new Error('missing eval csv')
+        return res.text()
+      })
       .then(text => {
         setCsvText(text)
-        setFileName('qa_pairs.csv')
+        setFileName('pulse_eval_orca_tregzi.csv')
       })
-      .catch(() => {
-        fetch('/eval_questions.csv')
-          .then(res => res.text())
-          .then(text => {
-            setCsvText(text)
-            setFileName('eval_questions.csv')
-          })
-          .catch(() => {})
-      })
+      .catch(() => {})
   }, [])
 
   function handleFileUpload(event) {
@@ -70,7 +65,8 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
         <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
           Exact Match + Entity Linker batch scores <strong>linked identity slots only</strong>
           {' '}(organization, regimen, indication, book). It does not run clarify, retrieve, or access synthesis.
-          {' '}Rows with type <code className="font-mono">clarify_needed</code> or{' '}
+          {' '}Rows with type <code className="font-mono">clarify_should_trigger</code>,{' '}
+          <code className="font-mono">clarify_needed</code>, or{' '}
           <code className="font-mono">under_specific</code> pass when the linker flags clarification
           needed, even if org/slots are not fully resolved.
         </p>

@@ -266,20 +266,25 @@ def _after_identity_resolved(session: dict) -> dict:
 def _complete_from_session(session: dict) -> dict:
     records = _query_records(session["linked"])
     if records and session.get("pending_writebacks"):
-        for item in session["pending_writebacks"]:
-            try:
-                upsert_synonym(
-                    item["dimension"],
-                    item["alias"],
-                    item["canonical"],
-                    source="user_confirm",
-                )
-                print(
-                    f"[exact_match_entity_linker] synonym writeback "
-                    f"{item['dimension']}: {item['alias']!r} -> {item['canonical']!r}"
-                )
-            except Exception as exc:
-                print(f"[exact_match_entity_linker] synonym writeback failed: {exc}")
+        from entity_linking import USE_SYNONYM_TABLE
+
+        if USE_SYNONYM_TABLE:
+            for item in session["pending_writebacks"]:
+                try:
+                    upsert_synonym(
+                        item["dimension"],
+                        item["alias"],
+                        item["canonical"],
+                        source="user_confirm",
+                    )
+                    print(
+                        f"[exact_match_entity_linker] synonym writeback "
+                        f"{item['dimension']}: {item['alias']!r} -> {item['canonical']!r}"
+                    )
+                except Exception as exc:
+                    print(
+                        f"[exact_match_entity_linker] synonym writeback failed: {exc}"
+                    )
         session["pending_writebacks"] = []
 
     return {
