@@ -18,10 +18,6 @@ FALLBACK_CSV_PATH = (
     Path(__file__).resolve().parent / "data" / "pulse_eval_orca_tregzi.csv"
 )
 
-DEPRECATED_RETRIEVAL_METHODS = frozenset(
-    {"vector_search", "exact_match_finetuned"}
-)
-
 LINKER_EVAL_METHODS = frozenset(
     {
         "exact_match_entity_linker",
@@ -487,32 +483,6 @@ def run_eval_questions(questions: list[dict]) -> dict:
 
     for item in questions:
         method = item.get("retrieval_method") or "exact_match_entity_linker"
-        if method in DEPRECATED_RETRIEVAL_METHODS:
-            results.append(
-                {
-                    **item,
-                    "actual_answer": "",
-                    "records_retrieved": 0,
-                    "comparison": {
-                        "match": None,
-                        "access": {"score": None, "match": None, "matched_terms": []},
-                        "slots": {
-                            "score": None,
-                            "match": None,
-                            "matched_fields": [],
-                            "mismatched_fields": [],
-                        },
-                        "actual_slots": None,
-                        "clarify_needed": None,
-                        "link_info": {},
-                    },
-                    "error": (
-                        f"Retrieval method '{method}' is deprecated. "
-                        "Use exact_match_entity_linker."
-                    ),
-                }
-            )
-            continue
         if method not in LINKER_EVAL_METHODS:
             results.append(
                 {

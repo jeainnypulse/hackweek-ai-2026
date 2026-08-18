@@ -7,7 +7,6 @@ import uuid
 from typing import Any, Optional
 
 from eval import (
-    DEPRECATED_RETRIEVAL_METHODS,
     LINKER_EVAL_METHODS,
     compare_linker_eval_result,
 )
@@ -121,30 +120,7 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 break
 
             method = item.get("retrieval_method") or "exact_match_entity_linker"
-            if method in DEPRECATED_RETRIEVAL_METHODS:
-                row = {
-                    **item,
-                    "actual_answer": "",
-                    "records_retrieved": 0,
-                    "comparison": {
-                        "match": None,
-                        "access": {"score": None, "match": None, "matched_terms": []},
-                        "slots": {
-                            "score": None,
-                            "match": None,
-                            "matched_fields": [],
-                            "mismatched_fields": [],
-                        },
-                        "actual_slots": None,
-                        "clarify_needed": None,
-                        "link_info": {},
-                    },
-                    "error": (
-                        f"Retrieval method '{method}' is deprecated. "
-                        "Use exact_match_entity_linker."
-                    ),
-                }
-            elif method not in LINKER_EVAL_METHODS:
+            if method not in LINKER_EVAL_METHODS:
                 row = {
                     **item,
                     "actual_answer": "",

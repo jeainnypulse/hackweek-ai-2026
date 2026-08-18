@@ -10,12 +10,6 @@ load_dotenv()
 
 from retrieval.exact_match import exact_match_turn
 from synthesis import synthesize_answer
-
-DEPRECATED_RETRIEVAL_METHODS = frozenset(
-    {"vector_search", "exact_match_finetuned"}
-)
-
-
 from db import get_db
 from feedback import save_feedback
 from eval import load_eval_questions, run_eval_questions
@@ -123,14 +117,6 @@ def _finalize_ask(
 def ask(req: AskRequest):
     try:
         method = req.retrieval_method or "exact_match_entity_linker"
-        if method in DEPRECATED_RETRIEVAL_METHODS:
-            raise HTTPException(
-                status_code=410,
-                detail=(
-                    f"Retrieval method '{method}' is deprecated. "
-                    "Use exact_match_entity_linker."
-                ),
-            )
         # "exact_match" kept as deprecated alias for older clients
         if method not in ("exact_match_entity_linker", "exact_match"):
             raise HTTPException(
