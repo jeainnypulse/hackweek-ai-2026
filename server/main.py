@@ -83,8 +83,15 @@ def _finalize_ask(
     retrieval_method: str,
     skip_log: bool,
     confirmed_slots: Optional[dict] = None,
+    intent: Optional[str] = None,
+    answer: Optional[str] = None,
+    citations: Optional[list] = None,
 ) -> dict:
-    answer, citations = synthesize_answer(question, records)
+    intent = intent or "access"
+    if answer is None:
+        answer, citations = synthesize_answer(question, records, intent=intent)
+    else:
+        citations = list(citations or [])
     result_id = str(uuid.uuid4())
     if not skip_log:
         db = get_db()
@@ -93,6 +100,7 @@ def _finalize_ask(
                 "_id": result_id,
                 "question": question,
                 "retrieval_method": retrieval_method,
+                "intent": intent,
                 "records_retrieved": len(records),
                 "answer": answer,
                 "citations": citations,
@@ -107,6 +115,7 @@ def _finalize_ask(
         "answer": answer,
         "citations": citations,
         "retrieval_method": retrieval_method,
+        "intent": intent,
         "records_retrieved": len(records),
         "confirmed_slots": confirmed_slots or {},
         "session_id": None,
@@ -139,13 +148,27 @@ def ask(req: AskRequest):
             )
 
         if turn.get("status") == "complete":
-            result = _finalize_ask(
-                turn.get("question") or req.question,
-                turn.get("records") or [],
-                method,
-                req.skip_log,
-                confirmed_slots=turn.get("confirmed_slots"),
-            )
+            intent = turn.get("intent")
+            if intent == "out_of_scope":
+                result = _finalize_ask(
+                    turn.get("question") or req.question,
+                    [],
+                    method,
+                    req.skip_log,
+                    confirmed_slots=turn.get("confirmed_slots") or {},
+                    intent="out_of_scope",
+                    answer=turn.get("message") or "",
+                    citations=[],
+                )
+            else:
+                result = _finalize_ask(
+                    turn.get("question") or req.question,
+                    turn.get("records") or [],
+                    method,
+                    req.skip_log,
+                    confirmed_slots=turn.get("confirmed_slots"),
+                    intent=intent,
+                )
             result["session_id"] = turn.get("session_id")
             result["link_info"] = turn.get("link_info") or {}
             return result
@@ -167,6 +190,7 @@ def ask(req: AskRequest):
             "answer": turn.get("message"),
             "citations": [],
             "retrieval_method": method,
+            "intent": turn.get("intent"),
             "records_retrieved": 0,
         }
     except HTTPException:

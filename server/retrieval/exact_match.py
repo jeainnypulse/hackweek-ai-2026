@@ -6,8 +6,13 @@ import uuid
 
 from bedrock import invoke_claude
 from db import get_db
-from entity_linking import LINK_DIMENSIONS, link_slots, upsert_synonym
-from permissions import scoped_query
+from entity_linking import (
+    LINK_DIMENSIONS,
+    catalogs_with_lives_books,
+    link_slots,
+    upsert_synonym,
+)
+from permissions import scoped_lives_query, scoped_query
 from retrieval.cascade_clarify import (
     CASCADE_SLOTS,
     IDENTITY_SLOTS,
@@ -17,12 +22,73 @@ from retrieval.cascade_clarify import (
     distinct_values,
     filter_from_confirmed,
     parse_selections,
+    resolve_selection,
 )
+from retrieval.intent import OUT_OF_SCOPE_MESSAGE, classify_intent
 import json
 
 # none | catalog | synonym | fuzzy | cascade | hypothesize_verify
 # cascade = synonym -> catalog -> LLM hypothesize+Mongo verify (production)
 ENTITY_LINK_METHOD = os.getenv("ENTITY_LINK_METHOD", "cascade")
+
+LIVES_LINK_DIMENSIONS = ("organization", "book")
+LIVES_DEFAULT_SOURCE = "MMIT"
+LIVES_DEFAULT_TERRITORY_TYPE = "National"
+LIVES_DEFAULT_TERRITORY_NAME = "United States"
+
+US_STATE_TO_CODE = {
+    "alabama": "AL",
+    "alaska": "AK",
+    "arizona": "AZ",
+    "arkansas": "AR",
+    "california": "CA",
+    "colorado": "CO",
+    "connecticut": "CT",
+    "delaware": "DE",
+    "district of columbia": "DC",
+    "florida": "FL",
+    "georgia": "GA",
+    "hawaii": "HI",
+    "idaho": "ID",
+    "illinois": "IL",
+    "indiana": "IN",
+    "iowa": "IA",
+    "kansas": "KS",
+    "kentucky": "KY",
+    "louisiana": "LA",
+    "maine": "ME",
+    "maryland": "MD",
+    "massachusetts": "MA",
+    "michigan": "MI",
+    "minnesota": "MN",
+    "mississippi": "MS",
+    "missouri": "MO",
+    "montana": "MT",
+    "nebraska": "NE",
+    "nevada": "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    "ohio": "OH",
+    "oklahoma": "OK",
+    "oregon": "OR",
+    "pennsylvania": "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    "tennessee": "TN",
+    "texas": "TX",
+    "utah": "UT",
+    "vermont": "VT",
+    "virginia": "VA",
+    "washington": "WA",
+    "west virginia": "WV",
+    "wisconsin": "WI",
+    "wyoming": "WY",
+}
 
 SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer question. Return ONLY valid JSON with no explanation or markdown.
 
@@ -40,14 +106,165 @@ Return format:
 
 Question: """
 
+LIVES_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer LIVES / enrollment question. Return ONLY valid JSON with no explanation or markdown.
+
+Slots to extract:
+- organization: specific payer name (e.g. "Aetna", "UnitedHealth Group"). Return null if not specified.
+- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid", "Medicaid"). Return null if not specified.
+- coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
+- territory: 2-letter US state code if a state is mentioned (e.g. "FL", "CA"). Return null for national / unspecified.
+
+Do NOT extract product, indication, line of therapy, or population. Lives data is payer enrollment, not product access.
+
+Return format:
+{"organization": "Aetna", "book": "Commercial", "coverage": "Pharmacy", "territory": null}
+
+Question: """
+
 # session_id -> interactive clarify state
 _sessions: dict[str, dict[str, Any]] = {}
 
 
-def extract_slots(question: str) -> dict:
-    response = invoke_claude(SLOT_EXTRACTION_PROMPT + question)
+def extract_slots(question: str, intent: str = "access") -> dict:
+    prompt = (
+        LIVES_SLOT_EXTRACTION_PROMPT
+        if intent == "lives"
+        else SLOT_EXTRACTION_PROMPT
+    )
+    response = invoke_claude(prompt + question)
     clean = response.strip().replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
+
+
+def _is_lives(session: dict) -> bool:
+    return session.get("intent") == "lives"
+
+
+def _with_intent(session: dict, payload: dict) -> dict:
+    payload["intent"] = session.get("intent") or "access"
+    return payload
+
+
+def _normalize_territory(raw: Optional[str]) -> tuple[str, str]:
+    if raw is None or str(raw).strip() in ("", "null"):
+        return LIVES_DEFAULT_TERRITORY_TYPE, LIVES_DEFAULT_TERRITORY_NAME
+    text = str(raw).strip()
+    key = " ".join(text.casefold().split())
+    if key in {"us", "usa", "united states", "national", "nationwide"}:
+        return LIVES_DEFAULT_TERRITORY_TYPE, LIVES_DEFAULT_TERRITORY_NAME
+    if len(text) == 2 and text.isalpha():
+        return "U.S. State", text.upper()
+    code = US_STATE_TO_CODE.get(key)
+    if code:
+        return "U.S. State", code
+    return "U.S. State", text
+
+
+def _apply_lives_defaults(slots: dict, linked: dict) -> None:
+    territory_type, territory_name = _normalize_territory(slots.get("territory"))
+    linked["territoryType"] = territory_type
+    linked["territoryName"] = territory_name
+    linked["source"] = LIVES_DEFAULT_SOURCE
+    coverage = slots.get("coverage")
+    if coverage and not linked.get("coverage"):
+        linked["coverage"] = coverage
+
+
+def _organization_to_slug(organization: str) -> Optional[str]:
+    if not organization:
+        return None
+    slugs = [
+        s
+        for s in get_db().payerLatestAccess.distinct(
+            "slug", {"organization": organization}
+        )
+        if isinstance(s, str) and s.strip()
+    ]
+    if not slugs:
+        return None
+    if len(slugs) > 1:
+        print(
+            f"[exact_match_entity_linker] multiple slugs for {organization!r}: {slugs}"
+        )
+    return slugs[0]
+
+
+def _orgs_for_slugs(slugs: list[str]) -> list[str]:
+    if not slugs:
+        return []
+    orgs = [
+        o
+        for o in get_db().payerLatestAccess.distinct(
+            "organization", {"slug": {"$in": slugs}}
+        )
+        if isinstance(o, str) and o.strip()
+    ]
+    return sorted(set(orgs), key=str.casefold)
+
+
+def _lives_mongo_filter(slots: dict, drop_fields: Optional[set[str]] = None) -> dict:
+    drop = set(drop_fields or ())
+    query: dict[str, Any] = {}
+    if "slug" not in drop and "organization" not in drop:
+        org = slots.get("organization")
+        if org:
+            slug = _organization_to_slug(str(org))
+            if slug:
+                query["slug"] = slug
+    for field in ("book", "coverage", "territoryType", "territoryName", "source"):
+        if field in drop:
+            continue
+        value = slots.get(field)
+        if value is not None and value != "":
+            query[field] = value
+    if "source" not in query and "source" not in drop:
+        query["source"] = LIVES_DEFAULT_SOURCE
+    if "territoryType" not in query and "territoryType" not in drop:
+        query["territoryType"] = LIVES_DEFAULT_TERRITORY_TYPE
+    if "territoryName" not in query and "territoryName" not in drop:
+        query["territoryName"] = LIVES_DEFAULT_TERRITORY_NAME
+    return query
+
+
+def _distinct_for_session(session: dict, field: str, filt: dict) -> list[str]:
+    if not _is_lives(session):
+        return distinct_values(field, filt)
+    if field == "organization":
+        lives_filt = _lives_mongo_filter(filt, drop_fields={"organization", "slug"})
+        slugs = distinct_values(
+            "slug",
+            lives_filt,
+            collection="payerLatestLives",
+            scoped_fn=scoped_lives_query,
+        )
+        return _orgs_for_slugs(slugs)
+    lives_filt = _lives_mongo_filter(filt, drop_fields={field, "organization"})
+    if field != "slug" and filt.get("organization"):
+        slug = _organization_to_slug(str(filt["organization"]))
+        if slug:
+            lives_filt["slug"] = slug
+    return distinct_values(
+        field,
+        lives_filt,
+        collection="payerLatestLives",
+        scoped_fn=scoped_lives_query,
+    )
+
+
+def _query_lives_records(slots: dict) -> list[dict]:
+    query = _lives_mongo_filter(slots)
+    if "slug" not in query:
+        print("[exact_match_entity_linker] lives query skipped: no slug")
+        return []
+    db = get_db()
+    scoped = scoped_lives_query(query)
+    records = list(db.payerLatestLives.find(scoped, {"_id": 0}).limit(50))
+    org = slots.get("organization")
+    if org:
+        for record in records:
+            record.setdefault("organization", org)
+    print(f"[exact_match_entity_linker] {len(records)} lives records for {query}")
+    return records
 
 
 def extract_and_link(
@@ -80,8 +297,16 @@ def clarify_needed(link_info: Optional[dict]) -> bool:
     return False
 
 
-def _query_records(slots: dict) -> list[dict]:
-    query = {k: v for k, v in slots.items() if v is not None and v != ""}
+def _query_records(slots: dict, intent: str = "access") -> list[dict]:
+    if intent == "lives":
+        return _query_lives_records(slots)
+    query = {
+        k: v
+        for k, v in slots.items()
+        if v is not None
+        and v != ""
+        and k not in ("territory", "territoryType", "territoryName", "source")
+    }
     if not query:
         return []
     db = get_db()
@@ -102,7 +327,9 @@ def _confirmed_view(session: dict) -> dict:
 def _auto_confirm_sole_identity(session: dict) -> None:
     """If an unresolved link dimension has only one Mongo value left, take it."""
     linked = session["linked"]
-    for dimension in LINK_DIMENSIONS:
+    dimensions = LIVES_LINK_DIMENSIONS if _is_lives(session) else LINK_DIMENSIONS
+    identity_slots = LIVES_LINK_DIMENSIONS if _is_lives(session) else IDENTITY_SLOTS
+    for dimension in dimensions:
         info = session["link_info"].get(dimension) or {}
         if info.get("status") not in ("ambiguous", "unknown"):
             continue
@@ -111,9 +338,9 @@ def _auto_confirm_sole_identity(session: dict) -> None:
         filt = {
             k: v
             for k, v in linked.items()
-            if k in IDENTITY_SLOTS and k != dimension and v
+            if k in identity_slots and k != dimension and v
         }
-        options = distinct_values(dimension, filt)
+        options = _distinct_for_session(session, dimension, filt)
         cands = info.get("candidates") or []
         if cands:
             options = [o for o in options if o in cands] or options
@@ -131,10 +358,11 @@ def _auto_confirm_sole_identity(session: dict) -> None:
             )
 
 
-def _first_pending_link(link_info: dict) -> Optional[tuple[str, dict]]:
+def _first_pending_link(link_info: dict, *, lives: bool = False) -> Optional[tuple[str, dict]]:
     """Prefer ambiguous-with-candidates, then unknown-with-candidates."""
+    dimensions = LIVES_LINK_DIMENSIONS if lives else LINK_DIMENSIONS
     for status in ("ambiguous", "unknown"):
-        for dimension in LINK_DIMENSIONS:
+        for dimension in dimensions:
             info = link_info.get(dimension) or {}
             if info.get("status") != status:
                 continue
@@ -145,12 +373,13 @@ def _first_pending_link(link_info: dict) -> Optional[tuple[str, dict]]:
 
 
 def _scoped_candidates(session: dict, dimension: str, fallback: list[str]) -> list[str]:
+    identity_slots = LIVES_LINK_DIMENSIONS if _is_lives(session) else IDENTITY_SLOTS
     filt = {
         k: v
         for k, v in session["linked"].items()
-        if k in IDENTITY_SLOTS and k != dimension and v
+        if k in identity_slots and k != dimension and v
     }
-    scoped = distinct_values(dimension, filt)
+    scoped = _distinct_for_session(session, dimension, filt)
     if not scoped:
         return list(fallback)
     if fallback:
@@ -161,7 +390,51 @@ def _scoped_candidates(session: dict, dimension: str, fallback: list[str]) -> li
 
 def _linker_clarify_response(session: dict) -> dict:
     _auto_confirm_sole_identity(session)
-    pending = _first_pending_link(session["link_info"])
+    if _is_lives(session) and not session["linked"].get("organization"):
+        info = session["link_info"].get("organization") or {}
+        session["current_slot"] = "organization"
+        raw = info.get("raw") or session["slots"].get("organization") or ""
+        candidates = _scoped_candidates(
+            session, "organization", list(info.get("candidates") or [])
+        )
+        if len(candidates) == 1:
+            pick = candidates[0]
+            session["linked"]["organization"] = pick
+            info = dict(info)
+            info["status"] = "matched"
+            info["value"] = pick
+            info["method"] = "auto_sole"
+            session["link_info"]["organization"] = info
+            print(
+                f"[exact_match_entity_linker] auto-confirmed sole "
+                f"organization={pick!r}"
+            )
+            return _after_identity_resolved(session)
+        return _with_intent(
+            session,
+            {
+                "status": "needs_input",
+                "session_id": session["session_id"],
+                "question": session["question"],
+                "message": (
+                    f"I couldn't uniquely resolve payer ({raw!r}). "
+                    "Please select the correct value from the list:"
+                    if raw
+                    else "Please select which payer you want lives for:"
+                ),
+                "current_slot": "organization",
+                "proposed_value": None,
+                "candidates": candidates,
+                "input_mode": "dropdown",
+                "confirmed_slots": _confirmed_view(session),
+                "allow_skip": False,
+                "cascade": None,
+                "link_info": session["link_info"],
+                "records": [],
+            },
+        )
+
+    pending = _first_pending_link(session["link_info"], lives=_is_lives(session))
     if not pending:
         return _after_identity_resolved(session)
 
@@ -187,27 +460,84 @@ def _linker_clarify_response(session: dict) -> dict:
         return _after_identity_resolved(session)
 
     label = dimension.replace("_", " ")
-    return {
-        "status": "needs_input",
-        "session_id": session["session_id"],
-        "question": session["question"],
-        "message": (
-            f"I couldn't uniquely resolve {label} ({raw!r}). "
-            f"Please select the correct value from the list:"
-        ),
-        "current_slot": dimension,
-        "proposed_value": None,
-        "candidates": candidates,
-        "input_mode": "dropdown",
-        "confirmed_slots": _confirmed_view(session),
-        "allow_skip": True,
-        "cascade": None,
-        "link_info": session["link_info"],
-        "records": [],
+    return _with_intent(
+        session,
+        {
+            "status": "needs_input",
+            "session_id": session["session_id"],
+            "question": session["question"],
+            "message": (
+                f"I couldn't uniquely resolve {label} ({raw!r}). "
+                f"Please select the correct value from the list:"
+            ),
+            "current_slot": dimension,
+            "proposed_value": None,
+            "candidates": candidates,
+            "input_mode": "dropdown",
+            "confirmed_slots": _confirmed_view(session),
+            "allow_skip": not _is_lives(session),
+            "cascade": None,
+            "link_info": session["link_info"],
+            "records": [],
+        },
+    )
+
+
+def _present_lives_cascade(session: dict, selections: Optional[dict] = None) -> dict:
+    options = _distinct_for_session(session, "coverage", session["linked"])
+    selected = session["linked"].get("coverage") or resolve_selection(
+        (selections or {}).get("coverage"), options
+    )
+    if not selected and len(options) == 1:
+        selected = options[0]
+    if selected:
+        session["linked"]["coverage"] = selected
+        return _complete_from_session(session)
+    if not options:
+        return _complete_from_session(session)
+
+    cascade = {
+        "pending_slots": ["coverage"],
+        "selections": {
+            "coverage": None,
+            "population": None,
+            "line": None,
+        },
+        "options": {
+            "coverage": options,
+            "population": [],
+            "line": [],
+        },
+        "allow_skip": {"population": True, "line": True},
     }
+    session["current_slot"] = None
+    session["cascade"] = cascade
+    return _with_intent(
+        session,
+        {
+            "status": "needs_cascade_input",
+            "session_id": session["session_id"],
+            "question": session["question"],
+            "message": (
+                "I would need some additional information from you "
+                "to give you an accurate response"
+            ),
+            "current_slot": None,
+            "proposed_value": None,
+            "candidates": options,
+            "input_mode": "cascade",
+            "confirmed_slots": _confirmed_view(session),
+            "allow_skip": False,
+            "cascade": cascade,
+            "link_info": session["link_info"],
+            "records": [],
+        },
+    )
 
 
 def _present_cascade(session: dict, selections: Optional[dict] = None) -> dict:
+    if _is_lives(session):
+        return _present_lives_cascade(session, selections)
     confirmed = session["linked"]
     selections = auto_confirm_sole_cascade_options(confirmed, selections)
     cascade = build_cascade_state(confirmed, selections)
@@ -220,30 +550,56 @@ def _present_cascade(session: dict, selections: Optional[dict] = None) -> dict:
 
     session["current_slot"] = None
     session["cascade"] = cascade
-    return {
-        "status": "needs_cascade_input",
-        "session_id": session["session_id"],
-        "question": session["question"],
-        "message": (
-            "I would need some additional information from you "
-            "to give you an accurate response"
-        ),
-        "current_slot": None,
-        "proposed_value": None,
-        "candidates": cascade["options"].get("coverage") or [],
-        "input_mode": "cascade",
-        "confirmed_slots": _confirmed_view(session),
-        "allow_skip": False,
-        "cascade": cascade,
-        "link_info": session["link_info"],
-        "records": [],
-    }
+    return _with_intent(
+        session,
+        {
+            "status": "needs_cascade_input",
+            "session_id": session["session_id"],
+            "question": session["question"],
+            "message": (
+                "I would need some additional information from you "
+                "to give you an accurate response"
+            ),
+            "current_slot": None,
+            "proposed_value": None,
+            "candidates": cascade["options"].get("coverage") or [],
+            "input_mode": "cascade",
+            "confirmed_slots": _confirmed_view(session),
+            "allow_skip": False,
+            "cascade": cascade,
+            "link_info": session["link_info"],
+            "records": [],
+        },
+    )
 
 
 def _after_identity_resolved(session: dict) -> dict:
     """Apply extracted cascade slots, then dropdown-clarify if needed."""
     slots = session.get("slots") or {}
     linked = session["linked"]
+
+    if _is_lives(session):
+        if not linked.get("book"):
+            books = _distinct_for_session(session, "book", linked)
+            if len(books) == 1:
+                linked["book"] = books[0]
+                session["link_info"]["book"] = {
+                    "raw": None,
+                    "status": "matched",
+                    "value": books[0],
+                    "method": "auto_sole",
+                }
+            elif len(books) > 1:
+                session["link_info"]["book"] = {
+                    "raw": slots.get("book"),
+                    "status": "ambiguous",
+                    "candidates": books,
+                    "method": "cascade:clarify",
+                }
+                return _linker_clarify_response(session)
+        if not linked.get("coverage"):
+            return _present_lives_cascade(session)
+        return _complete_from_session(session)
 
     # Prefill cascade fields from extraction when present
     for field in CASCADE_SLOTS:
@@ -264,7 +620,7 @@ def _after_identity_resolved(session: dict) -> dict:
 
 
 def _complete_from_session(session: dict) -> dict:
-    records = _query_records(session["linked"])
+    records = _query_records(session["linked"], intent=session.get("intent") or "access")
     if records and session.get("pending_writebacks"):
         from entity_linking import USE_SYNONYM_TABLE
 
@@ -287,18 +643,21 @@ def _complete_from_session(session: dict) -> dict:
                     )
         session["pending_writebacks"] = []
 
-    return {
-        "status": "complete",
-        "session_id": session["session_id"],
-        "question": session["question"],
-        "records": records,
-        "confirmed_slots": _confirmed_view(session),
-        "link_info": session["link_info"],
-        "candidates": [],
-        "cascade": None,
-        "message": None,
-        "current_slot": None,
-    }
+    return _with_intent(
+        session,
+        {
+            "status": "complete",
+            "session_id": session["session_id"],
+            "question": session["question"],
+            "records": records,
+            "confirmed_slots": _confirmed_view(session),
+            "link_info": session["link_info"],
+            "candidates": [],
+            "cascade": None,
+            "message": None,
+            "current_slot": None,
+        },
+    )
 
 
 def exact_match_retrieval(
@@ -362,25 +721,31 @@ def exact_match_turn(
 
         if action == "submit_cascade":
             selections = parse_selections(value)
+            if _is_lives(session):
+                return _present_lives_cascade(session, selections)
+
             cascade = build_cascade_state(session["linked"], selections)
             options = cascade["options"]
             picked = cascade["selections"]
 
             def _cascade_error(msg: str) -> dict:
                 session["cascade"] = cascade
-                return {
-                    "status": "needs_cascade_input",
-                    "session_id": session["session_id"],
-                    "question": session["question"],
-                    "message": msg,
-                    "current_slot": None,
-                    "candidates": options.get("coverage") or [],
-                    "confirmed_slots": _confirmed_view(session),
-                    "allow_skip": False,
-                    "cascade": cascade,
-                    "link_info": session["link_info"],
-                    "records": [],
-                }
+                return _with_intent(
+                    session,
+                    {
+                        "status": "needs_cascade_input",
+                        "session_id": session["session_id"],
+                        "question": session["question"],
+                        "message": msg,
+                        "current_slot": None,
+                        "candidates": options.get("coverage") or [],
+                        "confirmed_slots": _confirmed_view(session),
+                        "allow_skip": False,
+                        "cascade": cascade,
+                        "link_info": session["link_info"],
+                        "records": [],
+                    },
+                )
 
             coverage = picked.get("coverage")
             if not session["linked"].get("coverage"):
@@ -453,6 +818,7 @@ def exact_match_turn(
             "records": [],
             "confirmed_slots": session.get("linked") or {},
             "cascade": session.get("cascade"),
+            "intent": session.get("intent"),
         }
 
     q = question.strip()
@@ -464,11 +830,39 @@ def exact_match_turn(
             "records": [],
             "confirmed_slots": {},
             "cascade": None,
+            "intent": None,
         }
 
-    slots = extract_slots(q)
-    print(f"[exact_match_entity_linker] slots: {slots}")
-    linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+    intent = classify_intent(q)
+    if intent == "out_of_scope":
+        return {
+            "status": "complete",
+            "session_id": None,
+            "question": q,
+            "records": [],
+            "confirmed_slots": {},
+            "link_info": {},
+            "candidates": [],
+            "cascade": None,
+            "message": OUT_OF_SCOPE_MESSAGE,
+            "current_slot": None,
+            "intent": "out_of_scope",
+        }
+
+    slots = extract_slots(q, intent=intent)
+    print(f"[exact_match_entity_linker] intent={intent} slots: {slots}")
+    if intent == "lives":
+        catalogs = catalogs_with_lives_books()
+        linked, link_info = link_slots(
+            slots,
+            method=ENTITY_LINK_METHOD,
+            catalogs=catalogs,
+            dimensions=LIVES_LINK_DIMENSIONS,
+            fill_missing=False,
+        )
+        _apply_lives_defaults(slots, linked)
+    else:
+        linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
     if link_info:
         print(f"[exact_match_entity_linker] linked ({ENTITY_LINK_METHOD}): {link_info}")
 
@@ -476,6 +870,7 @@ def exact_match_turn(
     session = {
         "session_id": sid,
         "question": q,
+        "intent": intent,
         "slots": slots,
         "linked": linked,
         "link_info": link_info,

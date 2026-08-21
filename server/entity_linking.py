@@ -1143,11 +1143,28 @@ def _fill_missing_slots_from_permissioned_distinct(
                 progress = True
 
 
+def catalogs_with_lives_books() -> dict[str, list[str]]:
+    """Access catalogs plus book values that exist only on payerLatestLives (e.g. Medicaid)."""
+    catalogs = {k: list(v) for k, v in load_catalogs_from_db().items()}
+    from db import get_db
+
+    extra = [
+        v
+        for v in get_db().payerLatestLives.distinct("book")
+        if isinstance(v, str) and v.strip()
+    ]
+    catalogs["book"] = sorted(
+        set(catalogs.get("book") or []) | set(extra), key=str.casefold
+    )
+    return catalogs
+
+
 def link_slots(
     slots: dict,
     method: str = "cascade",
     catalogs: Optional[dict[str, list[str]]] = None,
     dimensions: tuple[str, ...] = LINK_DIMENSIONS,
+    fill_missing: bool = True,
 ) -> tuple[dict, dict[str, dict]]:
     """
     Canonicalize linkable slots. Returns (linked_slots, per_field_resolve_info).
@@ -1174,5 +1191,6 @@ def link_slots(
         if result["status"] == "matched" and result.get("value"):
             linked[dimension] = result["value"]
 
-    _fill_missing_slots_from_permissioned_distinct(linked, info, dimensions)
+    if fill_missing:
+        _fill_missing_slots_from_permissioned_distinct(linked, info, dimensions)
     return linked, info

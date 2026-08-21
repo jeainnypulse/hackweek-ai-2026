@@ -28,9 +28,16 @@ def clean_slot_value(value) -> Optional[str]:
     return text or None
 
 
-def distinct_values(field: str, filter_query: dict) -> list[str]:
+def distinct_values(
+    field: str,
+    filter_query: dict,
+    *,
+    collection: str = "payerLatestAccess",
+    scoped_fn=None,
+) -> list[str]:
     db = get_db()
-    values = db.payerLatestAccess.distinct(field, scoped_query(filter_query))
+    scoped_fn = scoped_fn or scoped_query
+    values = db[collection].distinct(field, scoped_fn(filter_query))
     cleaned = []
     for value in values:
         if value is None:
