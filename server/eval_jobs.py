@@ -10,6 +10,11 @@ from eval import (
     LINKER_EVAL_METHODS,
     compare_linker_eval_result,
 )
+from eval_orchestration import (
+    evaluate_orchestration_item,
+    is_orchestration_item,
+    orchestration_results_to_csv,
+)
 from retrieval.exact_match import extract_and_link
 
 
@@ -98,6 +103,7 @@ def _job_snapshot(job: dict) -> dict:
     return {
         "id": job["id"],
         "status": job["status"],
+        "eval_kind": job.get("eval_kind") or "linker",
         "progress": job["progress"],
         "total": job["total"],
         "passed": passed,
@@ -120,7 +126,28 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
                 break
 
             method = item.get("retrieval_method") or "exact_match_entity_linker"
-            if method not in LINKER_EVAL_METHODS:
+            if job.get("eval_kind") == "orchestration" or is_orchestration_item(item):
+                try:
+                    row = evaluate_orchestration_item(item)
+                    comparison = row.get("comparison") or {}
+                    if comparison.get("match") is True:
+                        passed += 1
+                    if comparison.get("expected_intent"):
+                        scored += 1
+                except Exception as exc:
+                    row = {
+                        **item,
+                        "actual_answer": "",
+                        "records_retrieved": 0,
+                        "comparison": {
+                            "match": False,
+                            "intent_match": False,
+                            "behavior_match": False,
+                            "observed_behavior": "error",
+                        },
+                        "error": str(exc),
+                    }
+            elif method not in LINKER_EVAL_METHODS:
                 row = {
                     **item,
                     "actual_answer": "",
@@ -205,16 +232,26 @@ def _run_job(job_id: str, questions: list[dict]) -> None:
 
 
 def start_eval_job(
-    questions: list[dict], default_retrieval_method: str = "exact_match_entity_linker"
+    questions: list[dict],
+    default_retrieval_method: str = "exact_match_entity_linker",
+    eval_kind: Optional[str] = None,
 ) -> str:
     for question in questions:
         if not question.get("retrieval_method"):
             question["retrieval_method"] = default_retrieval_method
 
+    if eval_kind not in ("orchestration", "linker"):
+        eval_kind = (
+            "orchestration"
+            if any(is_orchestration_item(q) for q in questions)
+            else "linker"
+        )
+
     job_id = str(uuid.uuid4())
     job = {
         "id": job_id,
         "status": "running",
+        "eval_kind": eval_kind,
         "progress": 0,
         "total": len(questions),
         "passed": 0,
@@ -256,4 +293,6 @@ def get_eval_job_csv(job_id: str) -> Optional[str]:
         job = _jobs.get(job_id)
         if not job or not job.get("results"):
             return None
+        if job.get("eval_kind") == "orchestration":
+            return orchestration_results_to_csv(job["results"])
         return results_to_csv(job["results"])

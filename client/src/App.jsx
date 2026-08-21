@@ -129,7 +129,7 @@ export default function App() {
     }
   }, [bgJob?.id, bgJob?.status])
 
-  async function startBackgroundJob({ csvText }) {
+  async function startBackgroundJob({ csvText, evalKind }) {
     const healthRes = await fetch('/api/health/bedrock')
     const healthData = await healthRes.json().catch(() => ({}))
     if (!healthRes.ok) {
@@ -142,6 +142,7 @@ export default function App() {
       body: JSON.stringify({
         csv_text: csvText,
         default_retrieval_method: RETRIEVAL_METHOD,
+        eval_kind: evalKind || undefined,
       }),
     })
     const data = await res.json()

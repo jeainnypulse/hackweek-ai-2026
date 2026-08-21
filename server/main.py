@@ -14,6 +14,7 @@ from db import get_db
 from feedback import save_feedback
 from eval import load_eval_questions, run_eval_questions
 from eval_jobs import get_eval_job, get_eval_job_csv, start_eval_job, stop_eval_job
+from eval_orchestration import load_orchestration_questions
 
 app = FastAPI(title="Pulse AI Chatbot", version="0.1.0")
 
@@ -59,6 +60,7 @@ class EvalJobStartRequest(BaseModel):
     questions: list[EvalQuestion] = []
     default_retrieval_method: str = "exact_match_entity_linker"
     csv_text: Optional[str] = None
+    eval_kind: Optional[str] = None  # linker | orchestration
 
 
 @app.get("/api/health")
@@ -207,8 +209,19 @@ def feedback(req: FeedbackRequest):
 
 
 @app.get("/api/eval/questions")
-def eval_questions():
+def eval_questions(kind: str = "linker"):
     from eval import EVAL_CSV_PATH, FALLBACK_CSV_PATH
+    from eval_orchestration import EVAL_CSV_PATH as ORCH_CSV, FALLBACK_CSV_PATH as ORCH_FALLBACK
+
+    if kind == "orchestration":
+        if ORCH_CSV.exists():
+            return {"csv": ORCH_CSV.read_text(encoding="utf-8"), "filename": ORCH_CSV.name}
+        if ORCH_FALLBACK.exists():
+            return {
+                "csv": ORCH_FALLBACK.read_text(encoding="utf-8"),
+                "filename": ORCH_FALLBACK.name,
+            }
+        raise HTTPException(status_code=404, detail="No orchestration eval CSV found")
 
     if EVAL_CSV_PATH.exists():
         return {
@@ -235,7 +248,20 @@ def eval_run(req: EvalRunRequest):
 def _resolve_eval_questions(
     req: Union[EvalRunRequest, EvalJobStartRequest],
 ) -> list[dict]:
-    if req.questions:
+    eval_kind = getattr(req, "eval_kind", None)
+    csv_header = ""
+    if req.csv_text:
+        csv_header = req.csv_text.splitlines()[0] if req.csv_text else ""
+    use_orchestration = eval_kind == "orchestration" or (
+        "expected_intent" in csv_header
+    )
+
+    if use_orchestration:
+        if req.csv_text:
+            questions = load_orchestration_questions(req.csv_text)
+        else:
+            questions = load_orchestration_questions()
+    elif req.questions:
         questions = [q.model_dump() for q in req.questions]
     elif req.csv_text:
         questions = load_eval_questions(req.csv_text)
@@ -250,7 +276,9 @@ def _resolve_eval_questions(
 @app.post("/api/eval/jobs/start")
 def eval_job_start(req: EvalJobStartRequest):
     questions = _resolve_eval_questions(req)
-    job_id = start_eval_job(questions, req.default_retrieval_method)
+    job_id = start_eval_job(
+        questions, req.default_retrieval_method, eval_kind=req.eval_kind
+    )
     return {"job_id": job_id, "total": len(questions)}
 
 

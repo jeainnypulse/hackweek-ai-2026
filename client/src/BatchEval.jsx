@@ -1,30 +1,57 @@
 import { useEffect, useState } from 'react'
 import { parseCsv } from './evalUtils'
 
+const EVAL_SETS = [
+  {
+    id: 'linker',
+    file: 'pulse_eval_orca_tregzi.csv',
+    label: 'Linker (slots)',
+    blurb:
+      'Scores linked identity slots only (organization, regimen, indication, book). Does not run retrieve or synthesis.',
+    columns: 'id, type, question, expected_slots, expected_access, citation',
+  },
+  {
+    id: 'orchestration',
+    file: 'pulse_eval_orchestration.csv',
+    label: 'Orchestration (intent)',
+    blurb:
+      'Scores the access vs lives vs out-of-scope router and first-turn behavior (complete / cascade / clarify / refuse). Runs classify + extract/link/retrieve for in-scope rows.',
+    columns:
+      'id, type, question, expected_intent, expected_behavior, expected_slots, expected_lives',
+  },
+]
+
 export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
+  const [evalKind, setEvalKind] = useState('orchestration')
   const [csvText, setCsvText] = useState('')
-  const [fileName, setFileName] = useState('pulse_eval_orca_tregzi.csv')
+  const [fileName, setFileName] = useState('pulse_eval_orchestration.csv')
   const [error, setError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
   const [starting, setStarting] = useState(false)
 
+  const activeSet = EVAL_SETS.find(item => item.id === evalKind) || EVAL_SETS[0]
   const running = bgJob?.status === 'running'
   const results = bgJob?.results || []
   const progress = bgJob?.progress || 0
   const questionCount = parseCsv(csvText).length
 
   useEffect(() => {
-    fetch('/pulse_eval_orca_tregzi.csv')
+    let cancelled = false
+    fetch(`/${activeSet.file}`)
       .then(res => {
         if (!res.ok) throw new Error('missing eval csv')
         return res.text()
       })
       .then(text => {
+        if (cancelled) return
         setCsvText(text)
-        setFileName('pulse_eval_orca_tregzi.csv')
+        setFileName(activeSet.file)
       })
       .catch(() => {})
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [activeSet.file])
 
   function handleFileUpload(event) {
     const file = event.target.files?.[0]
@@ -40,7 +67,7 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
 
   async function runInBackground() {
     if (questionCount === 0) {
-      setError('No questions found in CSV. Expected columns: id, type, question, expected_slots, expected_access, citation')
+      setError(`No questions found in CSV. Expected columns: ${activeSet.columns}`)
       return
     }
 
@@ -48,7 +75,7 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
     setError(null)
 
     try {
-      await onStartJob({ csvText })
+      await onStartJob({ csvText, evalKind })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -56,19 +83,37 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
     }
   }
 
+  const orchestrationResults = Boolean(
+    bgJob?.eval_kind === 'orchestration' || results[0]?.comparison?.expected_intent
+  )
+
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
         <p className="text-sm text-gray-700 mb-3">
           Run all questions on the server in the background. Results auto-download as CSV when finished — you can switch tabs while it runs.
         </p>
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          {EVAL_SETS.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setEvalKind(item.id)}
+              disabled={running}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                evalKind === item.id
+                  ? 'border-violet-300 bg-violet-50 text-violet-700'
+                  : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mb-3">
-          Exact Match + Entity Linker batch scores <strong>linked identity slots only</strong>
-          {' '}(organization, regimen, indication, book). It does not run clarify, retrieve, or access synthesis.
-          {' '}Rows with type <code className="font-mono">clarify_should_trigger</code>,{' '}
-          <code className="font-mono">clarify_needed</code>, or{' '}
-          <code className="font-mono">under_specific</code> pass when the linker flags clarification
-          needed, even if org/slots are not fully resolved.
+          {activeSet.blurb}
         </p>
 
         <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -80,8 +125,7 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
         </div>
 
         <p className="text-xs text-gray-400 mb-3">
-          CSV columns: id, type, question, expected_slots, expected_access, citation.
-          {' '}Gold identity slots should be stated or aliased in the question.
+          CSV columns: {activeSet.columns}.
         </p>
 
         <div className="flex items-center gap-3">
@@ -118,7 +162,7 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
           <div className="flex items-center gap-6 text-sm">
             <span>
               <strong>{bgJob.passed}</strong> / {bgJob.total} passed
-              {' '}(linked identity slots)
+              {' '}({orchestrationResults ? 'intent + first-turn behavior' : 'linked identity slots'})
             </span>
             <span className="text-gray-500">Pass rate: {((bgJob.pass_rate || 0) * 100).toFixed(0)}%</span>
             {bgJob.status === 'stopped' && <span className="text-amber-600">Stopped early</span>}
@@ -129,20 +173,23 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
 
       {results.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[48px_120px_1fr_80px_80px_80px] gap-3 px-4 py-2 border-b border-gray-100 text-xs font-medium text-gray-400 uppercase tracking-wide">
+          <div className="grid grid-cols-[48px_120px_1fr_80px_90px_90px] gap-3 px-4 py-2 border-b border-gray-100 text-xs font-medium text-gray-400 uppercase tracking-wide">
             <span>#</span>
             <span>Type</span>
             <span>Question</span>
             <span>Overall</span>
-            <span>Slots</span>
-            <span>Clarify</span>
+            <span>{orchestrationResults ? 'Intent' : 'Slots'}</span>
+            <span>{orchestrationResults ? 'Behavior' : 'Clarify'}</span>
           </div>
           <div className="divide-y divide-gray-100">
             {results.map(row => {
               const isOpen = expandedId === row.id
               const matched = row.comparison?.match
-              const slotsMatch = row.comparison?.slots?.match
+              const slotsMatch = orchestrationResults
+                ? row.comparison?.intent_match
+                : row.comparison?.slots?.match
               const clarifyNeeded = row.comparison?.clarify_needed
+              const behaviorOk = row.comparison?.behavior_match
               const statusClass = (value) => {
                 if (row.error) return 'text-red-600'
                 if (value === true) return 'text-green-600'
@@ -171,7 +218,7 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
                 <div key={row.id}>
                   <button
                     onClick={() => setExpandedId(isOpen ? null : row.id)}
-                    className="w-full grid grid-cols-[48px_120px_1fr_80px_80px_80px] gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                    className="w-full grid grid-cols-[48px_120px_1fr_80px_90px_90px] gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
                   >
                     <span className="text-xs text-gray-400">{row.id}</span>
                     <span className="text-xs text-gray-500 truncate">{row.type || '—'}</span>
@@ -180,10 +227,16 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
                       {statusLabel(matched)}
                     </span>
                     <span className={`text-xs font-medium ${statusClass(slotsMatch)}`}>
-                      {statusLabel(slotsMatch)}
+                      {orchestrationResults
+                        ? `${row.comparison?.expected_intent || '—'} → ${row.comparison?.actual_intent || '—'}`
+                        : statusLabel(slotsMatch)}
                     </span>
-                    <span className={`text-xs font-medium ${clarifyClass}`}>
-                      {clarifyLabel}
+                    <span className={`text-xs font-medium ${
+                      orchestrationResults ? statusClass(behaviorOk) : clarifyClass
+                    }`}>
+                      {orchestrationResults
+                        ? (row.comparison?.observed_behavior || '—')
+                        : clarifyLabel}
                     </span>
                   </button>
                   {isOpen && (
@@ -214,12 +267,15 @@ export default function BatchEval({ bgJob, onStartJob, onStopJob }) {
                           </p>
                         </div>
                       )}
-                      <div className="flex gap-4 text-xs text-gray-500">
-                        <span>Clarify needed: {clarifyNeeded ? 'yes' : 'no'}</span>
-                        {row.comparison?.slots?.score != null && (
-                          <span>Slots score: {(row.comparison.slots.score * 100).toFixed(0)}%</span>
-                        )}
-                      </div>
+                      {orchestrationResults && (
+                        <div className="flex gap-4 text-xs text-gray-500">
+                          <span>Intent: {row.comparison?.expected_intent} → {row.comparison?.actual_intent}</span>
+                          <span>Behavior: {row.comparison?.expected_behavior || 'any'} → {row.comparison?.observed_behavior}</span>
+                          {row.comparison?.expected_lives != null && (
+                            <span>Lives: {row.comparison.expected_lives} → {row.comparison.actual_lives ?? '—'}</span>
+                          )}
+                        </div>
+                      )}
                       {row.error && (
                         <div>
                           <p className="text-xs text-red-500 mb-1">Error</p>

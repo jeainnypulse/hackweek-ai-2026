@@ -1,0 +1,25 @@
+id,type,sub_type,question,expected_intent,expected_behavior,expected_slots,expected_lives,eval_notes
+1,access_lookup,canonical,"What is Tregzi access at Aetna for hematologic malignancies on Medicare?",access,,"{""regimen"": ""Tregzi"", ""indication"": ""Hematologic malignancies"", ""book"": ""Medicare"", ""organization"": ""Aetna""}",,Canonical access lookup — must NOT be out of scope
+2,access_lookup,qoa_wording,"What's the QoA for Tregzi at UnitedHealth Group on Commercial for hematologic malignancies?",access,,"{""regimen"": ""Tregzi"", ""indication"": ""Hematologic malignancies"", ""book"": ""Commercial"", ""organization"": ""UnitedHealth Group""}",,Access synonym QoA
+3,access_lookup,restriction,"Is Tregzi unrestricted at Humana for hematologic malignancies on Medicare?",access,,"{""regimen"": ""Tregzi"", ""indication"": ""Hematologic malignancies"", ""book"": ""Medicare"", ""organization"": ""Humana""}",,Access restriction language
+4,access_lookup,messy_payer,"What does UHC show for Tregzi in hematologic malignancies on Medicare?",access,,"{""regimen"": ""Tregzi"", ""indication"": ""Hematologic malignancies"", ""book"": ""Medicare"", ""organization"": ""UnitedHealth Group""}",,Access with payer alias
+5,lives_lookup,count,"How many commercial pharmacy lives does Aetna have?",lives,complete,"{""organization"": ""Aetna"", ""book"": ""Commercial"", ""coverage"": ""Pharmacy""}",5685473,National MMIT gold
+6,lives_lookup,count,"How many commercial medical lives does Aetna have?",lives,complete,"{""organization"": ""Aetna"", ""book"": ""Commercial"", ""coverage"": ""Medical""}",16747312,National MMIT gold
+7,lives_lookup,percent,"What percent of national commercial pharmacy lives does Aetna have?",lives,complete,"{""organization"": ""Aetna"", ""book"": ""Commercial"", ""coverage"": ""Pharmacy""}",5685473,Percent still a point lookup via livesPercent
+8,lives_lookup,count,"How many Medicare medical lives does UnitedHealth Group have?",lives,complete,"{""organization"": ""UnitedHealth Group"", ""book"": ""Medicare"", ""coverage"": ""Medical""}",9677815,National MMIT gold
+9,lives_lookup,count,"How many Medicare pharmacy lives does Humana have?",lives,complete,"{""organization"": ""Humana"", ""book"": ""Medicare"", ""coverage"": ""Pharmacy""}",7554670,National MMIT gold
+10,lives_lookup,count,"How many commercial pharmacy lives does Cigna have?",lives,complete,"{""organization"": ""Cigna"", ""book"": ""Commercial"", ""coverage"": ""Pharmacy""}",9339181,National MMIT gold
+11,lives_lookup,state,"How many commercial pharmacy lives does Aetna have in Florida?",lives,complete,"{""organization"": ""Aetna"", ""book"": ""Commercial"", ""coverage"": ""Pharmacy"", ""territory"": ""FL""}",951469,State-level lives
+12,lives_lookup,messy_payer,"How many commercial pharmacy lives does UHC have?",lives,complete,"{""organization"": ""UnitedHealth Group"", ""book"": ""Commercial"", ""coverage"": ""Pharmacy""}",,Payer alias on lives path
+13,lives_clarify,coverage,"How many commercial lives does Aetna have?",lives,cascade,"{""organization"": ""Aetna"", ""book"": ""Commercial""}",,Must ask Medical vs Pharmacy
+14,lives_clarify,coverage,"How many Medicare lives does Humana have?",lives,cascade,"{""organization"": ""Humana"", ""book"": ""Medicare""}",,Coverage cascade
+15,lives_clarify,payer,"How many commercial pharmacy lives does BCBS have?",lives,clarify,"{""book"": ""Commercial"", ""coverage"": ""Pharmacy""}",,Ambiguous payer should dropdown
+16,out_of_scope,mixed,"What percentage of commercial pharmacy lives have PA required for Tregzi?",out_of_scope,refuse,,,Access-weighted lives — refuse
+17,out_of_scope,mixed,"How many lives does Aetna cover for Tregzi?",out_of_scope,refuse,,,Lives are not product-specific
+18,out_of_scope,ranking,"Which payers have the most commercial lives?",out_of_scope,refuse,,,Multi-payer ranking
+19,out_of_scope,temporal,"How has Aetna's commercial lives changed over the last 6 months?",out_of_scope,refuse,,,Trends out of scope
+20,out_of_scope,other_domain,"Which pathways include Tregzi for hematologic malignancies?",out_of_scope,refuse,,,Clinical pathways collection
+21,out_of_scope,other_domain,"What PBM manages Cigna's commercial pharmacy benefit for Tregzi?",out_of_scope,refuse,,,PBM / org affiliation
+22,out_of_scope,other_domain,"What's the weather in Boston?",out_of_scope,refuse,,,Unrelated
+23,out_of_scope,comparison,"Compare Aetna and Cigna commercial pharmacy lives.",out_of_scope,refuse,,,Multi-payer compare
+24,access_lookup,underspecified,"What is Tregzi access at Aetna?",access,,"{""regimen"": ""Tregzi"", ""organization"": ""Aetna""}",,Still access even if book/indication missing

@@ -19,13 +19,19 @@ CLASSIFY_PROMPT = """Classify this user question for a payer market-access chatb
 Pick exactly one intent. Missing details (coverage, line, subtype) are fine —
 the app will clarify later. That does NOT make the question out of scope.
 
-access — the user wants quality of access / coverage / PA / restriction / score
-for a DRUG or PRODUCT at a payer (optionally indication, book, coverage).
-Lives counts are not the point.
+access — ONLY a simple lookup of fields on payerLatestAccess: access status /
+quality of access (QoA) / score / whether PA or step edit is required (yes/no)
+/ unrestricted vs restricted, for a DRUG or PRODUCT at a payer (optionally
+indication, book, coverage). Lives counts are not the point.
+A drug + payer mention is NOT enough to pick access if they want something else.
+Access is NOT: the text of PA / step-edit / additional criteria; documentation
+required for a PA; NCCN or other clinical guidelines; formulary tier (not
+accessData); pathways; PBM.
 Examples that MUST be access:
 - "What is Tregzi access at Aetna for hematologic malignancies on Medicare?"
 - "Is Brukinsa unrestricted at UHC on commercial?"
 - "What's the QoA for Tregzi at Humana?"
+- "Does Aetna require PA for Tregzi?"  (yes/no PA required — still access)
 
 lives — the user wants enrollment / covered lives / lives percent for a PAYER.
 No drug access restrictions. No "lives with PA / step edit / unrestricted".
@@ -33,11 +39,15 @@ Examples that MUST be lives:
 - "How many commercial pharmacy lives does Aetna have?"
 - "What percent of national Medicare medical lives does UnitedHealth have?"
 
-out_of_scope — ONLY if:
+out_of_scope — if ANY of these apply, even when a drug and payer are named:
 - the question needs BOTH access status AND lives in one answer
   (e.g. "% of commercial lives with PA for Tregzi")
 - rankings / comparisons across many payers / trends over time
-- a different domain (pathways, PBM, weather, etc.)
+- PA, step-edit, or additional CRITERIA text (not whether PA/SE is required)
+- documentation required for prior authorization
+- NCCN / clinical guidelines
+- formulary tier / copay / benefit design
+- pathways, PBM, weather, or any other domain
 - you truly cannot tell access vs lives
 
 Return ONLY JSON:
