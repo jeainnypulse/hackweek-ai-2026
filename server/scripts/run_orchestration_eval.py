@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Run orchestration eval from the terminal (no UI).
+Run orchestration / lives eval from the terminal (no UI).
 
 Usage (from server/):
   python scripts/run_orchestration_eval.py
   python scripts/run_orchestration_eval.py --classify-only
   python scripts/run_orchestration_eval.py --limit 10
   python scripts/run_orchestration_eval.py --csv data/pulse_eval_orchestration.csv
+  python scripts/run_orchestration_eval.py --lives
+  python scripts/run_orchestration_eval.py --lives --csv data/pulse_eval_lives.csv
 """
 
 from __future__ import annotations
@@ -27,7 +29,9 @@ load_dotenv(SERVER_DIR / ".env")
 os.environ.setdefault("ENTITY_LINK_METHOD", "cascade")
 
 from eval_orchestration import (  # noqa: E402
+    EVAL_LIVES_CSV_PATH,
     FALLBACK_CSV_PATH,
+    load_lives_questions,
     load_orchestration_questions,
     orchestration_results_to_csv,
     run_orchestration_questions,
@@ -38,21 +42,41 @@ def _print_row(index: int, total: int, row: dict) -> None:
     comparison = row.get("comparison") or {}
     ok = comparison.get("match") is True
     tag = "PASS" if ok else "FAIL"
-    print(
+    line = (
         f"[{index}/{total}] {tag} id={row.get('id')} "
         f"intent {comparison.get('expected_intent')}->{comparison.get('actual_intent')} "
         f"behavior {comparison.get('expected_behavior') or 'any'}->"
-        f"{comparison.get('observed_behavior')} "
-        f"{row.get('question')!r}",
-        flush=True,
+        f"{comparison.get('observed_behavior')}"
     )
+    if comparison.get("expected_lives") is not None:
+        line += (
+            f" lives {comparison.get('expected_lives')}->"
+            f"{comparison.get('actual_lives')}"
+        )
+    if comparison.get("slots_match") is not None:
+        line += f" slots={comparison.get('slots_match')}"
+    line += f" {row.get('question')!r}"
+    print(line, flush=True)
     if row.get("error"):
         print(f"         error: {row['error']}", flush=True)
+    mismatches = comparison.get("mismatched_fields") or []
+    if mismatches and not ok:
+        for item in mismatches:
+            print(
+                f"         slot {item.get('field')}: "
+                f"expected {item.get('expected')!r} got {item.get('actual')!r}",
+                flush=True,
+            )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Orchestration eval (terminal)")
-    parser.add_argument("--csv", type=Path, default=FALLBACK_CSV_PATH)
+    parser = argparse.ArgumentParser(description="Orchestration / lives eval (terminal)")
+    parser.add_argument("--csv", type=Path, default=None)
+    parser.add_argument(
+        "--lives",
+        action="store_true",
+        help="Run the simple lives lookup eval (intent + retrieve + slots + gold counts)",
+    )
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
         "--classify-only",
@@ -68,23 +92,27 @@ def main() -> None:
     parser.add_argument(
         "--out",
         type=Path,
-        default=RESULTS_DIR / "pulse_eval_orchestration_results.csv",
+        default=None,
         help="Where to save the results CSV (default: ~/Desktop/work/hackweek-ai-2026-test-results)",
     )
     args = parser.parse_args()
 
-    csv_path = args.csv if args.csv.is_absolute() else (Path.cwd() / args.csv)
+    default_csv = EVAL_LIVES_CSV_PATH if args.lives else FALLBACK_CSV_PATH
+    csv_arg = args.csv or default_csv
+    csv_path = csv_arg if csv_arg.is_absolute() else (Path.cwd() / csv_arg)
     if not csv_path.exists():
-        csv_path = args.csv if args.csv.exists() else FALLBACK_CSV_PATH
-    questions = load_orchestration_questions(csv_path.read_text(encoding="utf-8"))
+        csv_path = csv_arg if csv_arg.exists() else default_csv
+    loader = load_lives_questions if args.lives else load_orchestration_questions
+    questions = loader(csv_path.read_text(encoding="utf-8"))
     if args.limit:
         questions = questions[: args.limit]
     if not questions:
-        raise SystemExit(f"No orchestration questions in {csv_path}")
+        raise SystemExit(f"No eval questions in {csv_path}")
 
     print(
         f"Running {len(questions)} questions from {csv_path} "
-        f"({'classify-only' if args.classify_only else 'full first turn'})",
+        f"({'classify-only' if args.classify_only else 'full first turn'}"
+        f"{', lives' if args.lives else ''})",
         flush=True,
     )
 
@@ -97,7 +125,16 @@ def main() -> None:
         questions, classify_only=args.classify_only, on_row=on_row
     )
     csv_body = orchestration_results_to_csv(result["results"])
-    out_path = args.out.expanduser()
+    out_path = (
+        args.out
+        if args.out
+        else RESULTS_DIR
+        / (
+            "pulse_eval_lives_results.csv"
+            if args.lives
+            else "pulse_eval_orchestration_results.csv"
+        )
+    ).expanduser()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(csv_body, encoding="utf-8")
     print(

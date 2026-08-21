@@ -12,9 +12,8 @@ from retrieval.exact_match import exact_match_turn
 from retrieval.intent import classify_intent
 
 EVAL_CSV_PATH = Path(__file__).resolve().parent / "data" / "pulse_eval_orchestration.csv"
-FALLBACK_CSV_PATH = (
-    Path(__file__).resolve().parent / "data" / "pulse_eval_orchestration.csv"
-)
+FALLBACK_CSV_PATH = EVAL_CSV_PATH
+EVAL_LIVES_CSV_PATH = Path(__file__).resolve().parent / "data" / "pulse_eval_lives.csv"
 
 VALID_INTENTS = frozenset({"access", "lives", "out_of_scope"})
 VALID_BEHAVIORS = frozenset({"complete", "cascade", "clarify", "refuse", "empty"})
@@ -88,6 +87,19 @@ def load_orchestration_questions(csv_text: Optional[str] = None) -> list[dict]:
     return questions
 
 
+def load_lives_questions(csv_text: Optional[str] = None) -> list[dict]:
+    """Load lives-only eval rows (simple lookup + coverage/payer clarify)."""
+    if csv_text is not None:
+        questions = load_orchestration_questions(csv_text)
+    elif EVAL_LIVES_CSV_PATH.exists():
+        questions = load_orchestration_questions(
+            EVAL_LIVES_CSV_PATH.read_text(encoding="utf-8")
+        )
+    else:
+        return []
+    return [q for q in questions if q.get("expected_intent") == "lives"]
+
+
 def observed_behavior(turn: dict) -> str:
     intent = (turn.get("intent") or "").strip().lower()
     status = (turn.get("status") or "").strip()
@@ -119,6 +131,38 @@ def _record_lives(records: list) -> Optional[int]:
     return None
 
 
+_SLOT_KEY_ALIASES = {"territory": "territoryName"}
+
+
+def _slot_value(value: Any) -> Optional[str]:
+    if value is None or value == "" or str(value).strip().lower() == "null":
+        return None
+    return str(value).strip()
+
+
+def compare_expected_slots(
+    expected: Optional[dict], actual: Optional[dict]
+) -> tuple[Optional[bool], list[dict]]:
+    """Compare expected slot keys only. Missing expected_slots is not scored."""
+    if not isinstance(expected, dict) or not expected:
+        return None, []
+    actual = actual or {}
+    mismatches = []
+    for key, raw in expected.items():
+        exp = _slot_value(raw)
+        if exp is None:
+            continue
+        actual_key = _SLOT_KEY_ALIASES.get(key, key)
+        act = _slot_value(actual.get(actual_key))
+        if act is None and actual_key != key:
+            act = _slot_value(actual.get(key))
+        if act is None or act.casefold() != exp.casefold():
+            mismatches.append(
+                {"field": actual_key, "expected": exp, "actual": act}
+            )
+    return (len(mismatches) == 0), mismatches
+
+
 def compare_orchestration_result(item: dict, turn: dict) -> dict:
     expected_intent = (item.get("expected_intent") or "").strip().lower()
     actual_intent = (turn.get("intent") or "").strip().lower()
@@ -144,8 +188,17 @@ def compare_orchestration_result(item: dict, turn: dict) -> dict:
     if expected_lives is not None and expected_intent == "lives":
         lives_match = actual_lives == expected_lives
 
+    actual_slots = turn.get("confirmed_slots") or {}
+    slots_match: Optional[bool] = None
+    mismatched_fields: list[dict] = []
+    if expected_intent == "lives":
+        slots_match, mismatched_fields = compare_expected_slots(
+            item.get("expected_slots"), actual_slots
+        )
+
     match = all(
-        flag is not False for flag in (intent_match, behavior_match, lives_match)
+        flag is not False
+        for flag in (intent_match, behavior_match, lives_match, slots_match)
     )
 
     return {
@@ -153,13 +206,15 @@ def compare_orchestration_result(item: dict, turn: dict) -> dict:
         "intent_match": intent_match,
         "behavior_match": behavior_match,
         "lives_match": lives_match,
+        "slots_match": slots_match,
+        "mismatched_fields": mismatched_fields,
         "expected_intent": expected_intent,
         "actual_intent": actual_intent,
         "expected_behavior": expected_behavior or None,
         "observed_behavior": observed,
         "expected_lives": expected_lives,
         "actual_lives": actual_lives,
-        "actual_slots": turn.get("confirmed_slots") or {},
+        "actual_slots": actual_slots,
         "status": turn.get("status"),
         "records_retrieved": len(turn.get("records") or []),
         "message": turn.get("message"),
@@ -180,6 +235,8 @@ def evaluate_orchestration_item(item: dict, *, classify_only: bool = False) -> d
         }
         comparison = compare_orchestration_result(item, turn)
         comparison["lives_match"] = None
+        comparison["slots_match"] = None
+        comparison["mismatched_fields"] = []
         comparison["match"] = comparison["intent_match"] is not False
         return {
             **item,
@@ -223,6 +280,8 @@ def run_orchestration_questions(
                     "intent_match": False,
                     "behavior_match": False,
                     "lives_match": None,
+                    "slots_match": None,
+                    "mismatched_fields": [],
                     "expected_intent": item.get("expected_intent"),
                     "actual_intent": None,
                     "expected_behavior": item.get("expected_behavior") or None,
@@ -271,6 +330,7 @@ def orchestration_results_to_csv(results: list[dict]) -> str:
             "expected_lives",
             "actual_lives",
             "lives_match",
+            "slots_match",
             "match",
             "status",
             "records_retrieved",
@@ -307,6 +367,7 @@ def orchestration_results_to_csv(results: list[dict]) -> str:
                     else ""
                 ),
                 comparison.get("lives_match"),
+                comparison.get("slots_match"),
                 comparison.get("match"),
                 comparison.get("status") or "",
                 row.get("records_retrieved", 0),
