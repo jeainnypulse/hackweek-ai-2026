@@ -35,9 +35,11 @@ Examples that MUST be access:
 
 lives — the user wants enrollment / covered lives / lives percent for a PAYER.
 No drug access restrictions. No "lives with PA / step edit / unrestricted".
+A missing US state is fine (defaults to National). That does NOT make it out of scope.
 Examples that MUST be lives:
 - "How many commercial pharmacy lives does Aetna have?"
 - "What percent of national Medicare medical lives does UnitedHealth have?"
+- "How many commercial medical lives does Aetna cover in California?"
 
 out_of_scope — if ANY of these apply, even when a drug and payer are named:
 - the question needs BOTH access status AND lives in one answer
@@ -48,6 +50,10 @@ out_of_scope — if ANY of these apply, even when a drug and payer are named:
 - NCCN / clinical guidelines
 - formulary tier / copay / benefit design
 - pathways, PBM, weather, or any other domain
+- lives by region that is not a single US state (Northeast, Southeast, Midwest,
+  West Coast, East Coast)
+- lives in a city (New York City, Los Angeles, Chicago) — cities are not a
+  state-level lives record
 - you truly cannot tell access vs lives
 
 Return ONLY JSON:

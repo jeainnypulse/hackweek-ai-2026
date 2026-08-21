@@ -4,7 +4,6 @@ from typing import Any, Optional
 import os
 import uuid
 
-from bedrock import invoke_claude
 from db import get_db
 from entity_linking import (
     LINK_DIMENSIONS,
@@ -13,6 +12,10 @@ from entity_linking import (
     upsert_synonym,
 )
 from permissions import scoped_lives_query, scoped_query
+from retrieval.access_extract import (
+    ACCESS_SLOT_EXTRACTION_PROMPT,
+    extract_access_slots,
+)
 from retrieval.cascade_clarify import (
     CASCADE_SLOTS,
     IDENTITY_SLOTS,
@@ -25,115 +28,33 @@ from retrieval.cascade_clarify import (
     resolve_selection,
 )
 from retrieval.intent import OUT_OF_SCOPE_MESSAGE, classify_intent
-import json
+from retrieval.lives_extract import (
+    LIVES_DEFAULT_SOURCE,
+    LIVES_DEFAULT_TERRITORY_NAME,
+    LIVES_DEFAULT_TERRITORY_TYPE,
+    LIVES_SLOT_EXTRACTION_PROMPT,
+    apply_lives_defaults,
+    extract_lives_slots,
+)
+
+# Back-compat names for scripts that import prompts from this module
+SLOT_EXTRACTION_PROMPT = ACCESS_SLOT_EXTRACTION_PROMPT
 
 # none | catalog | synonym | fuzzy | cascade | hypothesize_verify
 # cascade = synonym -> catalog -> LLM hypothesize+Mongo verify (production)
 ENTITY_LINK_METHOD = os.getenv("ENTITY_LINK_METHOD", "cascade")
 
 LIVES_LINK_DIMENSIONS = ("organization", "book")
-LIVES_DEFAULT_SOURCE = "DRG"
-LIVES_DEFAULT_TERRITORY_TYPE = "National"
-LIVES_DEFAULT_TERRITORY_NAME = "United States"
-
-US_STATE_TO_CODE = {
-    "alabama": "AL",
-    "alaska": "AK",
-    "arizona": "AZ",
-    "arkansas": "AR",
-    "california": "CA",
-    "colorado": "CO",
-    "connecticut": "CT",
-    "delaware": "DE",
-    "district of columbia": "DC",
-    "florida": "FL",
-    "georgia": "GA",
-    "hawaii": "HI",
-    "idaho": "ID",
-    "illinois": "IL",
-    "indiana": "IN",
-    "iowa": "IA",
-    "kansas": "KS",
-    "kentucky": "KY",
-    "louisiana": "LA",
-    "maine": "ME",
-    "maryland": "MD",
-    "massachusetts": "MA",
-    "michigan": "MI",
-    "minnesota": "MN",
-    "mississippi": "MS",
-    "missouri": "MO",
-    "montana": "MT",
-    "nebraska": "NE",
-    "nevada": "NV",
-    "new hampshire": "NH",
-    "new jersey": "NJ",
-    "new mexico": "NM",
-    "new york": "NY",
-    "north carolina": "NC",
-    "north dakota": "ND",
-    "ohio": "OH",
-    "oklahoma": "OK",
-    "oregon": "OR",
-    "pennsylvania": "PA",
-    "rhode island": "RI",
-    "south carolina": "SC",
-    "south dakota": "SD",
-    "tennessee": "TN",
-    "texas": "TX",
-    "utah": "UT",
-    "vermont": "VT",
-    "virginia": "VA",
-    "washington": "WA",
-    "west virginia": "WV",
-    "wisconsin": "WI",
-    "wyoming": "WY",
-}
-
-SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer question. Return ONLY valid JSON with no explanation or markdown.
-
-Slots to extract:
-- regimen: brand name (e.g. Spinraza, Calquence). Return null if not specified.
-- indication: disease/indication only (e.g. "Spinal Muscular Atrophy", "CLL"). Do NOT include line of therapy.
-- line: line of therapy (e.g. "1L", "2L"). Return null if not specified.
-- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid"). Return null if not specified.
-- organization: specific payer name (e.g. "Health Net", "Aetna"). Return null if not specified.
-- coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
-- population: patient population/subtype if mentioned. Return null if not specified.
-
-Return format:
-{"regimen": "Spinraza", "indication": "Spinal Muscular Atrophy", "line": "1L", "book": "Managed Medicaid", "organization": "Health Net", "coverage": "Medical", "population": null}
-
-Question: """
-
-LIVES_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer LIVES / enrollment question. Return ONLY valid JSON with no explanation or markdown.
-
-Slots to extract:
-- organization: specific payer name (e.g. "Aetna", "UnitedHealth Group"). Return null if not specified.
-- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid", "Medicaid"). Return null if not specified.
-- coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
-- territory: 2-letter US state code if a state is mentioned (e.g. "FL", "CA"). Return null for national / unspecified.
-
-Do NOT extract product, indication, line of therapy, or population. Lives data is payer enrollment, not product access.
-
-Return format:
-{"organization": "Aetna", "book": "Commercial", "coverage": "Pharmacy", "territory": null}
-
-Question: """
 
 # session_id -> interactive clarify state
 _sessions: dict[str, dict[str, Any]] = {}
 
 
 def extract_slots(question: str, intent: str = "access") -> dict:
-    prompt = (
-        LIVES_SLOT_EXTRACTION_PROMPT
-        if intent == "lives"
-        else SLOT_EXTRACTION_PROMPT
-    )
-    response = invoke_claude(prompt + question)
-    clean = response.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(clean)
+    """Dispatch to the access or lives extractor (separate prompts, one LLM call)."""
+    if intent == "lives":
+        return extract_lives_slots(question)
+    return extract_access_slots(question)
 
 
 def _is_lives(session: dict) -> bool:
@@ -143,31 +64,6 @@ def _is_lives(session: dict) -> bool:
 def _with_intent(session: dict, payload: dict) -> dict:
     payload["intent"] = session.get("intent") or "access"
     return payload
-
-
-def _normalize_territory(raw: Optional[str]) -> tuple[str, str]:
-    if raw is None or str(raw).strip() in ("", "null"):
-        return LIVES_DEFAULT_TERRITORY_TYPE, LIVES_DEFAULT_TERRITORY_NAME
-    text = str(raw).strip()
-    key = " ".join(text.casefold().split())
-    if key in {"us", "usa", "united states", "national", "nationwide"}:
-        return LIVES_DEFAULT_TERRITORY_TYPE, LIVES_DEFAULT_TERRITORY_NAME
-    if len(text) == 2 and text.isalpha():
-        return "U.S. State", text.upper()
-    code = US_STATE_TO_CODE.get(key)
-    if code:
-        return "U.S. State", code
-    return "U.S. State", text
-
-
-def _apply_lives_defaults(slots: dict, linked: dict) -> None:
-    territory_type, territory_name = _normalize_territory(slots.get("territory"))
-    linked["territoryType"] = territory_type
-    linked["territoryName"] = territory_name
-    linked["source"] = LIVES_DEFAULT_SOURCE
-    coverage = slots.get("coverage")
-    if coverage and not linked.get("coverage"):
-        linked["coverage"] = coverage
 
 
 def _organization_to_slug(organization: str) -> Optional[str]:
@@ -860,7 +756,7 @@ def exact_match_turn(
             dimensions=LIVES_LINK_DIMENSIONS,
             fill_missing=False,
         )
-        _apply_lives_defaults(slots, linked)
+        apply_lives_defaults(slots, linked)
     else:
         linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
     if link_info:
