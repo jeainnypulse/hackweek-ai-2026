@@ -11,12 +11,7 @@ from typing import Any, Optional
 from retrieval.exact_match import exact_match_turn
 from retrieval.intent import classify_intent
 
-EVAL_CSV_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "client"
-    / "public"
-    / "pulse_eval_orchestration.csv"
-)
+EVAL_CSV_PATH = Path(__file__).resolve().parent / "data" / "pulse_eval_orchestration.csv"
 FALLBACK_CSV_PATH = (
     Path(__file__).resolve().parent / "data" / "pulse_eval_orchestration.csv"
 )
@@ -296,15 +291,21 @@ def orchestration_results_to_csv(results: list[dict]) -> str:
                 comparison.get("expected_intent") or row.get("expected_intent") or "",
                 comparison.get("actual_intent") or "",
                 comparison.get("intent_match"),
-                comparison.get("expected_behavior") or row.get("expected_behavior") or "",
+                comparison.get("expected_behavior")
+                or row.get("expected_behavior")
+                or "",
                 comparison.get("observed_behavior") or "",
                 comparison.get("behavior_match"),
-                comparison.get("expected_lives")
-                if comparison.get("expected_lives") is not None
-                else row.get("expected_lives") or "",
-                comparison.get("actual_lives")
-                if comparison.get("actual_lives") is not None
-                else "",
+                (
+                    comparison.get("expected_lives")
+                    if comparison.get("expected_lives") is not None
+                    else row.get("expected_lives") or ""
+                ),
+                (
+                    comparison.get("actual_lives")
+                    if comparison.get("actual_lives") is not None
+                    else ""
+                ),
                 comparison.get("lives_match"),
                 comparison.get("match"),
                 comparison.get("status") or "",

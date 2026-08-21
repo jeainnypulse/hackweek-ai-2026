@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import uuid
@@ -12,9 +11,6 @@ from retrieval.exact_match import exact_match_turn
 from synthesis import synthesize_answer
 from db import get_db
 from feedback import save_feedback
-from eval import load_eval_questions, run_eval_questions
-from eval_jobs import get_eval_job, get_eval_job_csv, start_eval_job, stop_eval_job
-from eval_orchestration import load_orchestration_questions
 
 app = FastAPI(title="Pulse AI Chatbot", version="0.1.0")
 
@@ -35,32 +31,9 @@ class AskRequest(BaseModel):
     value: Optional[Union[str, dict]] = None
 
 
-
 class FeedbackRequest(BaseModel):
     id: str
     rating: str
-
-
-class EvalQuestion(BaseModel):
-    id: Optional[str] = None
-    type: Optional[str] = None
-    question: str
-    expected_answer: str = ""
-    citation: Optional[str] = None
-    retrieval_method: str = "exact_match_entity_linker"
-
-
-class EvalRunRequest(BaseModel):
-    questions: list[EvalQuestion] = []
-    default_retrieval_method: str = "exact_match_entity_linker"
-    csv_text: Optional[str] = None
-
-
-class EvalJobStartRequest(BaseModel):
-    questions: list[EvalQuestion] = []
-    default_retrieval_method: str = "exact_match_entity_linker"
-    csv_text: Optional[str] = None
-    eval_kind: Optional[str] = None  # linker | orchestration
 
 
 @app.get("/api/health")
@@ -201,114 +174,10 @@ def ask(req: AskRequest):
         raise HTTPException(status_code=503, detail=str(exc))
 
 
-
 @app.post("/api/feedback")
 def feedback(req: FeedbackRequest):
     save_feedback(req.id, req.rating)
     return {"ok": True}
-
-
-@app.get("/api/eval/questions")
-def eval_questions(kind: str = "linker"):
-    from eval import EVAL_CSV_PATH, FALLBACK_CSV_PATH
-    from eval_orchestration import EVAL_CSV_PATH as ORCH_CSV, FALLBACK_CSV_PATH as ORCH_FALLBACK
-
-    if kind == "orchestration":
-        if ORCH_CSV.exists():
-            return {"csv": ORCH_CSV.read_text(encoding="utf-8"), "filename": ORCH_CSV.name}
-        if ORCH_FALLBACK.exists():
-            return {
-                "csv": ORCH_FALLBACK.read_text(encoding="utf-8"),
-                "filename": ORCH_FALLBACK.name,
-            }
-        raise HTTPException(status_code=404, detail="No orchestration eval CSV found")
-
-    if EVAL_CSV_PATH.exists():
-        return {
-            "csv": EVAL_CSV_PATH.read_text(encoding="utf-8"),
-            "filename": EVAL_CSV_PATH.name,
-        }
-    if FALLBACK_CSV_PATH.exists():
-        return {
-            "csv": FALLBACK_CSV_PATH.read_text(encoding="utf-8"),
-            "filename": FALLBACK_CSV_PATH.name,
-        }
-    raise HTTPException(status_code=404, detail="No eval CSV found")
-
-
-@app.post("/api/eval/run")
-def eval_run(req: EvalRunRequest):
-    questions = _resolve_eval_questions(req)
-    for question in questions:
-        if not question.get("retrieval_method"):
-            question["retrieval_method"] = req.default_retrieval_method
-    return run_eval_questions(questions)
-
-
-def _resolve_eval_questions(
-    req: Union[EvalRunRequest, EvalJobStartRequest],
-) -> list[dict]:
-    eval_kind = getattr(req, "eval_kind", None)
-    csv_header = ""
-    if req.csv_text:
-        csv_header = req.csv_text.splitlines()[0] if req.csv_text else ""
-    use_orchestration = eval_kind == "orchestration" or (
-        "expected_intent" in csv_header
-    )
-
-    if use_orchestration:
-        if req.csv_text:
-            questions = load_orchestration_questions(req.csv_text)
-        else:
-            questions = load_orchestration_questions()
-    elif req.questions:
-        questions = [q.model_dump() for q in req.questions]
-    elif req.csv_text:
-        questions = load_eval_questions(req.csv_text)
-    else:
-        questions = load_eval_questions()
-
-    if not questions:
-        raise HTTPException(status_code=400, detail="No eval questions provided")
-    return questions
-
-
-@app.post("/api/eval/jobs/start")
-def eval_job_start(req: EvalJobStartRequest):
-    questions = _resolve_eval_questions(req)
-    job_id = start_eval_job(
-        questions, req.default_retrieval_method, eval_kind=req.eval_kind
-    )
-    return {"job_id": job_id, "total": len(questions)}
-
-
-@app.get("/api/eval/jobs/{job_id}")
-def eval_job_status(job_id: str):
-    job = get_eval_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Eval job not found")
-    return job
-
-
-@app.post("/api/eval/jobs/{job_id}/stop")
-def eval_job_stop(job_id: str):
-    if not stop_eval_job(job_id):
-        raise HTTPException(status_code=400, detail="Job is not running")
-    return {"ok": True}
-
-
-@app.get("/api/eval/jobs/{job_id}/results.csv")
-def eval_job_results_csv(job_id: str):
-    csv_text = get_eval_job_csv(job_id)
-    if csv_text is None:
-        raise HTTPException(status_code=404, detail="Results not available")
-    return PlainTextResponse(
-        csv_text,
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="eval_results_{job_id[:8]}.csv"'
-        },
-    )
 
 
 if __name__ == "__main__":

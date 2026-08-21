@@ -8,12 +8,7 @@ from typing import Optional
 from entity_linking import LINK_DIMENSIONS
 from retrieval.exact_match import clarify_needed, extract_and_link
 
-EVAL_CSV_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "client"
-    / "public"
-    / "pulse_eval_orca_tregzi.csv"
-)
+EVAL_CSV_PATH = Path(__file__).resolve().parent / "data" / "pulse_eval_orca_tregzi.csv"
 FALLBACK_CSV_PATH = (
     Path(__file__).resolve().parent / "data" / "pulse_eval_orca_tregzi.csv"
 )
@@ -25,7 +20,7 @@ LINKER_EVAL_METHODS = frozenset(
     }
 )
 
-# Identity fields scored for linker-scoped batch eval
+# Identity fields scored for linker-scoped CLI eval
 IDENTITY_SLOT_FIELDS = tuple(LINK_DIMENSIONS)
 
 # CSV type values that expect the linker to stop for clarification

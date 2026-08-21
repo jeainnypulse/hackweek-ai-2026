@@ -1,13 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import BatchEval from './BatchEval'
-import { downloadJobResults } from './evalUtils'
+import { useState } from 'react'
 
 const RETRIEVAL_METHOD = 'exact_match_entity_linker'
-
-const TABS = [
-  { id: 'chat', label: 'Chat' },
-  { id: 'batch', label: 'Batch Eval' },
-]
 
 const SLOT_LABELS = {
   regimen: 'Product',
@@ -77,13 +70,11 @@ function ConfirmedSlots({ slots, asList = false }) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState('chat')
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [history, setHistory] = useState([])
-  const [bgJob, setBgJob] = useState(null)
   const [sessionId, setSessionId] = useState(null)
   const [slotInput, setSlotInput] = useState('')
   const [cascadeSelections, setCascadeSelections] = useState({
@@ -91,86 +82,10 @@ export default function App() {
     population: '',
     line: '',
   })
-  const downloadedJobRef = useRef(null)
 
   const awaitingInput = result?.status === 'needs_input' || result?.status === 'error'
   const awaitingCascade = result?.status === 'needs_cascade_input'
   const inConversation = Boolean(sessionId) && (awaitingInput || awaitingCascade)
-
-  useEffect(() => {
-    if (!bgJob?.id || bgJob.status !== 'running') return
-
-    let cancelled = false
-
-    async function poll() {
-      try {
-        const res = await fetch(`/api/eval/jobs/${bgJob.id}`)
-        const data = await res.json()
-        if (!res.ok) throw new Error(parseErrorDetail(data, 'Failed to poll eval job'))
-        if (cancelled) return
-        setBgJob(data)
-
-        if (data.status !== 'running' && downloadedJobRef.current !== data.id) {
-          downloadedJobRef.current = data.id
-          if (data.results?.length) {
-            await downloadJobResults(data.id)
-          }
-        }
-      } catch (err) {
-        if (!cancelled) setError(formatAwsError(err.message))
-      }
-    }
-
-    poll()
-    const interval = setInterval(poll, 2000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [bgJob?.id, bgJob?.status])
-
-  async function startBackgroundJob({ csvText, evalKind }) {
-    const healthRes = await fetch('/api/health/bedrock')
-    const healthData = await healthRes.json().catch(() => ({}))
-    if (!healthRes.ok) {
-      throw new Error(parseErrorDetail(healthData, 'Bedrock is unavailable. Run `aws sso login` and restart the server.'))
-    }
-
-    const res = await fetch('/api/eval/jobs/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        csv_text: csvText,
-        default_retrieval_method: RETRIEVAL_METHOD,
-        eval_kind: evalKind || undefined,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(parseErrorDetail(data, 'Failed to start background eval'))
-
-    downloadedJobRef.current = null
-    setBgJob({
-      id: data.job_id,
-      status: 'running',
-      progress: 0,
-      total: data.total,
-      passed: 0,
-      pass_rate: 0,
-      results: [],
-    })
-  }
-
-  async function stopBackgroundJob() {
-    if (!bgJob?.id) return
-    await fetch(`/api/eval/jobs/${bgJob.id}/stop`, { method: 'POST' })
-    const res = await fetch(`/api/eval/jobs/${bgJob.id}`)
-    const data = await res.json()
-    setBgJob(data)
-    if (data.results?.length && downloadedJobRef.current !== data.id) {
-      downloadedJobRef.current = data.id
-      await downloadJobResults(data.id)
-    }
-  }
 
   function syncCascadeSelections(data) {
     const selections = data?.cascade?.selections || {}
@@ -308,45 +223,7 @@ export default function App() {
           </p>
         </div>
 
-        {bgJob?.status === 'running' && (
-          <div className="bg-violet-50 border border-violet-200 text-violet-800 text-sm rounded-xl p-3 mb-4 flex items-center justify-between">
-            <span>
-              Batch eval running in background: {bgJob.progress}/{bgJob.total} complete
-            </span>
-            <button
-              onClick={() => setTab('batch')}
-              className="text-xs px-2 py-1 rounded border border-violet-200 hover:bg-violet-100"
-            >
-              View
-            </button>
-          </div>
-        )}
-
-        <div className="flex gap-1 mb-4 border-b border-gray-200">
-          {TABS.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setTab(item.id)}
-              className={`px-4 py-2 text-sm transition-colors border-b-2 -mb-px ${
-                tab === item.id
-                  ? 'border-violet-600 text-violet-600 font-medium'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'batch' ? (
-          <BatchEval
-            bgJob={bgJob}
-            onStartJob={startBackgroundJob}
-            onStopJob={stopBackgroundJob}
-          />
-        ) : (
-          <>
-            <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
               <textarea
                 rows={3}
                 placeholder="Ask a payer question — e.g. What is Calquence's QoA for 1L CLL under commercial plans?"
@@ -613,8 +490,6 @@ export default function App() {
                 </div>
               </div>
             )}
-          </>
-        )}
       </div>
     </div>
   )

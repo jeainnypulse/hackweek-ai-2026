@@ -273,7 +273,7 @@ def extract_and_link(
     """
     Extract slots then canonicalize via the entity linker (no Mongo retrieve).
 
-    Returns (linked_slots, link_info). Used by batch eval (linker-scoped scoring).
+    Returns (linked_slots, link_info). Used by CLI eval (linker-scoped scoring).
     """
     if slots is None:
         slots = extract_slots(question)
