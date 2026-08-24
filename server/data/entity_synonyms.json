@@ -4,7 +4,7 @@
     "generated_from": "pulse_eval_v6_permissioned_results.csv failure analysis",
     "ambiguous_excluded": "Mappings with multiple possible gold values are documented in _ambiguous_notes and must be handled by clarify, not synonym resolution",
     "total_synonyms": {
-      "organization": 847,
+      "organization": 848,
       "regimen": 100,
       "indication": 129,
       "book": 31
@@ -844,6 +844,7 @@
       "wellmark": "Wellmark BlueCross BlueShield",
       "wellmark bcbs": "Wellmark BlueCross BlueShield",
       "wellmark blue cross and blue shield": "Wellmark BlueCross BlueShield",
+      "wellmark blue cross blue shield": "Wellmark BlueCross BlueShield",
       "wellmark bluecross blueshield": "Wellmark BlueCross BlueShield",
       "wellmark iowa": "Wellmark BlueCross BlueShield",
       "wellmark, inc.": "Wellmark BlueCross BlueShield",
