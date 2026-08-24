@@ -28,6 +28,7 @@ from retrieval.cascade_clarify import (
     resolve_selection,
 )
 from retrieval.intent import OUT_OF_SCOPE_MESSAGE, classify_intent
+from retrieval.joint_extract import extract_joint_slots
 from retrieval.lives_extract import (
     LIVES_DEFAULT_SOURCE,
     LIVES_DEFAULT_TERRITORY_NAME,
@@ -51,14 +52,20 @@ _sessions: dict[str, dict[str, Any]] = {}
 
 
 def extract_slots(question: str, intent: str = "access") -> dict:
-    """Dispatch to the access or lives extractor (separate prompts, one LLM call)."""
+    """Dispatch to the access, lives, or joint extractor (one LLM call)."""
     if intent == "lives":
         return extract_lives_slots(question)
+    if intent == "joint":
+        return extract_joint_slots(question)
     return extract_access_slots(question)
 
 
 def _is_lives(session: dict) -> bool:
     return session.get("intent") == "lives"
+
+
+def _is_joint(session: dict) -> bool:
+    return session.get("intent") == "joint"
 
 
 def _with_intent(session: dict, payload: dict) -> dict:
@@ -193,23 +200,45 @@ def clarify_needed(link_info: Optional[dict]) -> bool:
     return False
 
 
-def _query_records(slots: dict, intent: str = "access") -> list[dict]:
-    if intent == "lives":
-        return _query_lives_records(slots)
+def _query_access_records(slots: dict) -> list[dict]:
     query = {
         k: v
         for k, v in slots.items()
         if v is not None
         and v != ""
-        and k not in ("territory", "territoryType", "territoryName", "source")
+        and k not in (
+            "territory",
+            "territoryType",
+            "territoryName",
+            "source",
+            "collection",
+        )
     }
     if not query:
         return []
     db = get_db()
     scoped = scoped_query(query)
     records = list(db.payerLatestAccess.find(scoped, {"_id": 0}).limit(50))
-    print(f"[exact_match_entity_linker] {len(records)} records found for {query}")
+    print(f"[exact_match_entity_linker] {len(records)} access records for {query}")
     return records
+
+
+def _query_joint_records(slots: dict) -> list[dict]:
+    access = [{**row, "collection": "access"} for row in _query_access_records(slots)]
+    lives = [{**row, "collection": "lives"} for row in _query_lives_records(slots)]
+    print(
+        f"[exact_match_entity_linker] joint records: "
+        f"access={len(access)} lives={len(lives)}"
+    )
+    return access + lives
+
+
+def _query_records(slots: dict, intent: str = "access") -> list[dict]:
+    if intent == "lives":
+        return _query_lives_records(slots)
+    if intent == "joint":
+        return _query_joint_records(slots)
+    return _query_access_records(slots)
 
 
 def _confirmed_view(session: dict) -> dict:
@@ -408,6 +437,7 @@ def _present_lives_cascade(session: dict, selections: Optional[dict] = None) -> 
     }
     session["current_slot"] = None
     session["cascade"] = cascade
+    session["lives_coverage_cascade"] = True
     return _with_intent(
         session,
         {
@@ -442,10 +472,11 @@ def _present_cascade(session: dict, selections: Optional[dict] = None) -> dict:
         for field in CASCADE_SLOTS:
             if field not in confirmed:
                 confirmed[field] = None
-        return _complete_from_session(session)
+        return _maybe_lives_coverage_then_complete(session)
 
     session["current_slot"] = None
     session["cascade"] = cascade
+    session["lives_coverage_cascade"] = False
     return _with_intent(
         session,
         {
@@ -512,6 +543,13 @@ def _after_identity_resolved(session: dict) -> dict:
             if linked.get(field)
         }
         return _present_cascade(session, prefill)
+    return _maybe_lives_coverage_then_complete(session)
+
+
+def _maybe_lives_coverage_then_complete(session: dict) -> dict:
+    """Joint still needs Medical vs Pharmacy if access cascade left it empty."""
+    if _is_joint(session) and not session["linked"].get("coverage"):
+        return _present_lives_cascade(session)
     return _complete_from_session(session)
 
 
@@ -613,11 +651,13 @@ def exact_match_turn(
 
         if action == "cascade_options":
             selections = parse_selections(value)
+            if session.get("lives_coverage_cascade"):
+                return _present_lives_cascade(session, selections)
             return _present_cascade(session, selections)
 
         if action == "submit_cascade":
             selections = parse_selections(value)
-            if _is_lives(session):
+            if _is_lives(session) or session.get("lives_coverage_cascade"):
                 return _present_lives_cascade(session, selections)
 
             cascade = build_cascade_state(session["linked"], selections)
@@ -675,7 +715,7 @@ def exact_match_turn(
                 else:
                     session["linked"]["line"] = None
 
-            return _complete_from_session(session)
+            return _maybe_lives_coverage_then_complete(session)
 
         slot = session.get("current_slot")
         if action == "provide" and slot:
@@ -759,6 +799,8 @@ def exact_match_turn(
         apply_lives_defaults(slots, linked)
     else:
         linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+        if intent == "joint":
+            apply_lives_defaults(slots, linked)
     if link_info:
         print(f"[exact_match_entity_linker] linked ({ENTITY_LINK_METHOD}): {link_info}")
 

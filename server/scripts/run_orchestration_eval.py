@@ -9,6 +9,7 @@ Usage (from server/):
   python scripts/run_orchestration_eval.py --csv data/pulse_eval_orchestration.csv
   python scripts/run_orchestration_eval.py --lives
   python scripts/run_orchestration_eval.py --lives --csv /path/to/eval.csv
+  python scripts/run_orchestration_eval.py --joint --csv /path/to/eval.csv
 
 Results go to hackweek-ai-2026-test-results/results/<input_stem>_results.csv.
 If that file exists, the name increments: _results_1, _results_2, ...
@@ -37,6 +38,7 @@ os.environ.setdefault("ENTITY_LINK_METHOD", "cascade")
 from eval_orchestration import (  # noqa: E402
     EVAL_LIVES_CSV_PATH,
     FALLBACK_CSV_PATH,
+    load_joint_questions,
     load_lives_questions,
     load_orchestration_questions,
     orchestration_results_to_csv,
@@ -60,6 +62,22 @@ def _unused_results_path(base: Path) -> Path:
         if not candidate.exists():
             return candidate
         n += 1
+
+
+def _read_eval_csv(path: Path) -> str:
+    raw = path.read_bytes()
+    if raw[:2] == b"PK":
+        raise SystemExit(
+            f"{path} is a Numbers/Excel file (zip), not CSV.\n"
+            "In Numbers: File → Export To → CSV, then pass that .csv to --csv."
+        )
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f"{path} is not UTF-8 text ({exc}). Export a CSV and try again."
+        ) from exc
+    return text
 
 
 def _auto_results_path(csv_path: Path) -> Path:
@@ -106,6 +124,11 @@ def main() -> None:
         action="store_true",
         help="Run the simple lives lookup eval (intent + retrieve + slots + gold counts)",
     )
+    parser.add_argument(
+        "--joint",
+        action="store_true",
+        help="Run the joint single-payer eval. Requires --csv (no in-repo default file).",
+    )
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument(
         "--classify-only",
@@ -130,13 +153,22 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    default_csv = EVAL_LIVES_CSV_PATH if args.lives else FALLBACK_CSV_PATH
+    if args.joint:
+        if not args.csv:
+            raise SystemExit("--joint requires --csv pointing at your eval file")
+        loader = load_joint_questions
+        default_csv = args.csv
+    elif args.lives:
+        default_csv = EVAL_LIVES_CSV_PATH
+        loader = load_lives_questions
+    else:
+        default_csv = FALLBACK_CSV_PATH
+        loader = load_orchestration_questions
     csv_arg = args.csv or default_csv
     csv_path = csv_arg if csv_arg.is_absolute() else (Path.cwd() / csv_arg)
     if not csv_path.exists():
         csv_path = csv_arg if csv_arg.exists() else default_csv
-    loader = load_lives_questions if args.lives else load_orchestration_questions
-    questions = loader(csv_path.read_text(encoding="utf-8"))
+    questions = loader(_read_eval_csv(csv_path))
     if args.limit:
         questions = questions[: args.limit]
     if not questions:
@@ -145,7 +177,7 @@ def main() -> None:
     print(
         f"Running {len(questions)} questions from {csv_path} "
         f"({'classify-only' if args.classify_only else 'full first turn'}"
-        f"{', lives' if args.lives else ''})",
+        f"{', joint' if args.joint else ', lives' if args.lives else ''})",
         flush=True,
     )
 

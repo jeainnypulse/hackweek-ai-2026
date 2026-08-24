@@ -1,4 +1,4 @@
-"""Classify a question as a simple access lookup, simple lives lookup, or out of scope."""
+"""Classify a question as access, lives, joint (both for one payer), or out of scope."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from typing import Optional
 
 from bedrock import invoke_claude
 
-INTENTS = ("access", "lives", "out_of_scope")
+INTENTS = ("access", "lives", "joint", "out_of_scope")
 
 OUT_OF_SCOPE_MESSAGE = (
     "This question is out of scope. I can answer simple lookup questions about "
-    "payer access or payer lives, but not this one."
+    "payer access, payer lives, or both for a single payer, but not this one."
 )
 
 CLASSIFY_PROMPT = """Classify this user question for a payer market-access chatbot.
@@ -41,9 +41,21 @@ Examples that MUST be lives:
 - "What percent of national Medicare medical lives does UnitedHealth have?"
 - "How many commercial medical lives does Aetna cover in California?"
 
+joint — TWO separate simple facts for ONE named payer in the same question:
+  (1) access / QoA / score / PA-required yes-no / unrestricted for a DRUG, AND
+  (2) that payer's enrollment / lives count or percent (not weighted by access).
+Do NOT pick joint for access-only or lives-only questions.
+Examples that MUST be joint:
+- "What is Tregzi access at Aetna on Medicare, and how many Medicare pharmacy lives do they have?"
+- "Is Brukinsa unrestricted at UHC on commercial, and what is UHC's commercial medical enrollment?"
+- "What's the QoA for Tregzi at Humana, and how many Medicare pharmacy lives does Humana have?"
+
 out_of_scope — if ANY of these apply, even when a drug and payer are named:
-- the question needs BOTH access status AND lives in one answer
-  (e.g. "% of commercial lives with PA for Tregzi")
+- access-weighted lives (lives that HAVE a restriction), e.g.
+  "% of commercial lives with PA for Tregzi"
+- lives attributed to a product without asking access as a separate fact, e.g.
+  "How many lives does Aetna cover for Tregzi?"
+- access and lives for TWO or more payers, or compare / rank payers
 - rankings / comparisons across many payers / trends over time
 - PA, step-edit, or additional CRITERIA text (not whether PA/SE is required)
 - documentation required for prior authorization
@@ -54,10 +66,10 @@ out_of_scope — if ANY of these apply, even when a drug and payer are named:
   West Coast, East Coast)
 - lives in a city (New York City, Los Angeles, Chicago) — cities are not a
   state-level lives record
-- you truly cannot tell access vs lives
+- you truly cannot tell access vs lives vs joint
 
 Return ONLY JSON:
-{"intent": "access" | "lives" | "out_of_scope", "reason": "short"}
+{"intent": "access" | "lives" | "joint" | "out_of_scope", "reason": "short"}
 
 Question: """
 
@@ -78,6 +90,9 @@ def _parse_intent(raw: str) -> str:
         "payerlatestaccess": "access",
         "enrollment": "lives",
         "payerlatestlives": "lives",
+        "both": "joint",
+        "access_and_lives": "joint",
+        "access+lives": "joint",
         "oos": "out_of_scope",
         "out-of-scope": "out_of_scope",
         "unsure": "out_of_scope",
@@ -89,7 +104,7 @@ def _parse_intent(raw: str) -> str:
 
 
 def classify_intent(question: str) -> str:
-    """Return access | lives | out_of_scope.
+    """Return access | lives | joint | out_of_scope.
 
     Unsure / unparseable model output → out_of_scope.
     Bedrock/auth failures propagate so the API does not fake a refusal.
@@ -97,7 +112,7 @@ def classify_intent(question: str) -> str:
     last_error: Optional[Exception] = None
     for attempt in range(2):
         try:
-            raw = invoke_claude(CLASSIFY_PROMPT + question, max_tokens=120)
+            raw = invoke_claude(CLASSIFY_PROMPT + question, max_tokens=160)
             intent = _parse_intent(raw)
             print(f"[intent] {intent} (attempt {attempt + 1}) raw={raw!r}")
             return intent

@@ -1,4 +1,4 @@
-"""Orchestration eval: intent router + first-turn behavior (access / lives / OOS)."""
+"""Orchestration eval: intent router + first-turn behavior (access / lives / joint / OOS)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ EVAL_CSV_PATH = Path(__file__).resolve().parent / "data" / "pulse_eval_orchestra
 FALLBACK_CSV_PATH = EVAL_CSV_PATH
 EVAL_LIVES_CSV_PATH = Path(__file__).resolve().parent / "data" / "pulse_eval_lives.csv"
 
-VALID_INTENTS = frozenset({"access", "lives", "out_of_scope"})
+VALID_INTENTS = frozenset({"access", "lives", "joint", "out_of_scope"})
 VALID_BEHAVIORS = frozenset({"complete", "cascade", "clarify", "refuse", "empty"})
 
 
@@ -78,6 +78,14 @@ def load_orchestration_questions(csv_text: Optional[str] = None) -> list[dict]:
     else:
         return []
 
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if (
+        len(lines) >= 2
+        and "expected_intent" not in lines[0]
+        and "expected_intent" in lines[1]
+    ):
+        source = "\n".join(lines[1:])
+
     reader = csv.DictReader(io.StringIO(source))
     questions = []
     for index, row in enumerate(reader):
@@ -98,6 +106,16 @@ def load_lives_questions(csv_text: Optional[str] = None) -> list[dict]:
     else:
         return []
     return [q for q in questions if q.get("expected_intent") == "lives"]
+
+
+def load_joint_questions(csv_text: str) -> list[dict]:
+    """Load joint eval rows plus OOS negatives from caller-provided CSV text."""
+    questions = load_orchestration_questions(csv_text)
+    return [
+        q
+        for q in questions
+        if q.get("expected_intent") in ("joint", "out_of_scope")
+    ]
 
 
 def observed_behavior(turn: dict) -> str:
@@ -175,7 +193,7 @@ def compare_orchestration_result(item: dict, turn: dict) -> dict:
         behavior_match = observed == expected_behavior
     elif expected_intent == "out_of_scope":
         behavior_match = observed == "refuse"
-    elif expected_intent in ("access", "lives"):
+    elif expected_intent in ("access", "lives", "joint"):
         # In-scope questions must not be refused as OOS. Clarify/cascade/complete/empty
         # are all acceptable unless expected_behavior is set.
         behavior_match = observed != "refuse"
@@ -185,13 +203,13 @@ def compare_orchestration_result(item: dict, turn: dict) -> dict:
     expected_lives = item.get("expected_lives")
     actual_lives = _record_lives(turn.get("records") or [])
     lives_match: Optional[bool] = None
-    if expected_lives is not None and expected_intent == "lives":
+    if expected_lives is not None and expected_intent in ("lives", "joint"):
         lives_match = actual_lives == expected_lives
 
     actual_slots = turn.get("confirmed_slots") or {}
     slots_match: Optional[bool] = None
     mismatched_fields: list[dict] = []
-    if expected_intent == "lives":
+    if expected_intent in ("lives", "joint"):
         slots_match, mismatched_fields = compare_expected_slots(
             item.get("expected_slots"), actual_slots
         )
