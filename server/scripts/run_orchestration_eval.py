@@ -8,7 +8,11 @@ Usage (from server/):
   python scripts/run_orchestration_eval.py --limit 10
   python scripts/run_orchestration_eval.py --csv data/pulse_eval_orchestration.csv
   python scripts/run_orchestration_eval.py --lives
-  python scripts/run_orchestration_eval.py --lives --csv data/pulse_eval_lives.csv
+  python scripts/run_orchestration_eval.py --lives --csv /path/to/eval.csv
+
+Results go to hackweek-ai-2026-test-results/results/<input_stem>_results.csv.
+If that file exists, the name increments: _results_1, _results_2, ...
+Pass --out only to override the destination.
 """
 
 from __future__ import annotations
@@ -20,7 +24,9 @@ import time
 from pathlib import Path
 
 SERVER_DIR = Path(__file__).resolve().parent.parent
-RESULTS_DIR = Path.home() / "Desktop" / "work" / "hackweek-ai-2026-test-results"
+RESULTS_DIR = (
+    Path.home() / "Desktop" / "work" / "hackweek-ai-2026-test-results" / "results"
+)
 sys.path.insert(0, str(SERVER_DIR))
 
 from dotenv import load_dotenv
@@ -36,6 +42,29 @@ from eval_orchestration import (  # noqa: E402
     orchestration_results_to_csv,
     run_orchestration_questions,
 )
+
+
+def _unused_results_path(base: Path) -> Path:
+    """Return base, or stem_1 / stem_2 / ... if that file already exists.
+
+    For an auto path ending in ``_results.csv``, collisions become
+    ``_results_1.csv``, ``_results_2.csv``, ...
+    """
+    if not base.exists():
+        return base
+    stem = base.stem
+    suffix = base.suffix or ".csv"
+    n = 1
+    while True:
+        candidate = base.with_name(f"{stem}_{n}{suffix}")
+        if not candidate.exists():
+            return candidate
+        n += 1
+
+
+def _auto_results_path(csv_path: Path) -> Path:
+    suffix = csv_path.suffix or ".csv"
+    return RESULTS_DIR / f"{csv_path.stem}_results{suffix}"
 
 
 def _print_row(index: int, total: int, row: dict) -> None:
@@ -93,7 +122,11 @@ def main() -> None:
         "--out",
         type=Path,
         default=None,
-        help="Where to save the results CSV (default: ~/Desktop/work/hackweek-ai-2026-test-results)",
+        help=(
+            "Results CSV path. Default: "
+            "~/Desktop/work/hackweek-ai-2026-test-results/results/<input>_results.csv "
+            "(increments _results_1, _results_2, ... if the file exists)"
+        ),
     )
     args = parser.parse_args()
 
@@ -125,16 +158,9 @@ def main() -> None:
         questions, classify_only=args.classify_only, on_row=on_row
     )
     csv_body = orchestration_results_to_csv(result["results"])
-    out_path = (
-        args.out
-        if args.out
-        else RESULTS_DIR
-        / (
-            "pulse_eval_lives_results.csv"
-            if args.lives
-            else "pulse_eval_orchestration_results.csv"
-        )
-    ).expanduser()
+    out_path = _unused_results_path(
+        (args.out if args.out else _auto_results_path(csv_path)).expanduser()
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(csv_body, encoding="utf-8")
     print(
