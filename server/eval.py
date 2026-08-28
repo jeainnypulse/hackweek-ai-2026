@@ -20,7 +20,7 @@ LINKER_EVAL_METHODS = frozenset(
     }
 )
 
-# Identity fields scored for linker-scoped CLI eval
+# All supplied treatment-plan fields are now linker-scoped and scored.
 IDENTITY_SLOT_FIELDS = tuple(LINK_DIMENSIONS)
 
 # CSV type values that expect the linker to stop for clarification

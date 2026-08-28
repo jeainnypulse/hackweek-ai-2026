@@ -20,19 +20,24 @@ Slots to extract:
   Return null if not specified.
 - coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
 - population: patient population/subtype if mentioned. Return null if not specified.
-- territoryName: 2-letter US state code if the question locates lives in a US
-  state. Otherwise null.
+- territoryName: preserve the exact state/territory mention from the question,
+  including state-like misspellings, so the entity linker can canonicalize it.
+  Otherwise null.
+- territoryInvalid: the exact requested geography when it is clearly a city,
+  region, or non-state location. Keep state-like misspellings in territoryName.
+  Otherwise null.
 
 Territory rules:
-- Accept full state names ("California", "New Jersey") and 2-letter codes ("CA").
-- Always return the 2-letter code (e.g. "CA" not "California").
+- Preserve full names, two-letter codes, and state-like misspellings exactly as
+  written.
 - Only extract a state when it is a geographic constraint ("in California",
   "in FL"), not when the state is part of a payer name.
 - "nationally", "across the US", "in the United States" → territoryName null.
-- Do NOT extract cities or regions as a state — return null.
+- Put cities, regions, and clearly non-state locations in territoryInvalid so
+  the user can clarify. Keep state-like misspellings in territoryName.
 
 Return format:
-{"regimen": "Tregzi", "indication": "Hematologic malignancies", "line": null, "book": "Medicare", "organization": "Aetna", "coverage": "Pharmacy", "population": null, "territoryName": null}
+{"regimen": "Tregzi", "indication": "Hematologic malignancies", "line": null, "book": "Medicare", "organization": "Aetna", "coverage": "Pharmacy", "population": null, "territoryName": null, "territoryInvalid": null}
 
 Question: """
 

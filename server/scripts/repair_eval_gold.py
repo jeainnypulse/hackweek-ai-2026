@@ -40,13 +40,13 @@ from dotenv import load_dotenv
 load_dotenv(SERVER_DIR / ".env")
 
 from entity_linking import (  # noqa: E402
-    LINK_DIMENSIONS,
+    IDENTITY_LINK_DIMENSIONS,
     load_catalogs_from_db,
     load_synonyms,
     normalize_key,
 )
 
-IDENTITY_FIELDS = LINK_DIMENSIONS  # organization, regimen, indication, book
+IDENTITY_FIELDS = IDENTITY_LINK_DIMENSIONS
 
 
 def _parse_slots(raw: str) -> Optional[dict]:

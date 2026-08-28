@@ -7,8 +7,12 @@ import uuid
 from db import get_db
 from entity_linking import (
     LINK_DIMENSIONS,
-    catalogs_with_lives_books,
+    TERRITORY_LINK_DIMENSION,
+    TREATMENT_PLAN_LINK_DIMENSIONS,
     link_slots,
+    load_catalogs_from_db,
+    load_territory_catalog_from_db,
+    territory_type_for_canonical,
     upsert_synonym,
 )
 from permissions import scoped_lives_query, scoped_query
@@ -34,8 +38,11 @@ from retrieval.lives_extract import (
     LIVES_DEFAULT_TERRITORY_NAME,
     LIVES_DEFAULT_TERRITORY_TYPE,
     LIVES_SLOT_EXTRACTION_PROMPT,
+    LIVES_TERRITORY_OPTIONS,
     apply_lives_defaults,
     extract_lives_slots,
+    is_national_territory,
+    normalized_state_code,
 )
 
 # Back-compat names for scripts that import prompts from this module
@@ -45,7 +52,9 @@ SLOT_EXTRACTION_PROMPT = ACCESS_SLOT_EXTRACTION_PROMPT
 # cascade = synonym -> catalog -> LLM hypothesize+Mongo verify (production)
 ENTITY_LINK_METHOD = os.getenv("ENTITY_LINK_METHOD", "cascade")
 
-LIVES_LINK_DIMENSIONS = ("organization", "book")
+LIVES_CORE_LINK_DIMENSIONS = ("organization", "book", "coverage")
+LIVES_LINK_DIMENSIONS = (*LIVES_CORE_LINK_DIMENSIONS, TERRITORY_LINK_DIMENSION)
+JOINT_LINK_DIMENSIONS = (*TREATMENT_PLAN_LINK_DIMENSIONS, TERRITORY_LINK_DIMENSION)
 
 # session_id -> interactive clarify state
 _sessions: dict[str, dict[str, Any]] = {}
@@ -188,7 +197,7 @@ def extract_and_link(
 
 
 def clarify_needed(link_info: Optional[dict]) -> bool:
-    """True if any identity dimension is still ambiguous/unknown with candidates."""
+    """True if any linked dimension is still ambiguous/unknown with candidates."""
     if not link_info:
         return False
     for dimension in LINK_DIMENSIONS:
@@ -252,8 +261,12 @@ def _confirmed_view(session: dict) -> dict:
 def _auto_confirm_sole_identity(session: dict) -> None:
     """If an unresolved link dimension has only one Mongo value left, take it."""
     linked = session["linked"]
-    dimensions = LIVES_LINK_DIMENSIONS if _is_lives(session) else LINK_DIMENSIONS
-    identity_slots = LIVES_LINK_DIMENSIONS if _is_lives(session) else IDENTITY_SLOTS
+    dimensions = (
+        LIVES_CORE_LINK_DIMENSIONS if _is_lives(session) else LINK_DIMENSIONS
+    )
+    identity_slots = (
+        LIVES_CORE_LINK_DIMENSIONS if _is_lives(session) else IDENTITY_SLOTS
+    )
     for dimension in dimensions:
         info = session["link_info"].get(dimension) or {}
         if info.get("status") not in ("ambiguous", "unknown"):
@@ -285,7 +298,7 @@ def _auto_confirm_sole_identity(session: dict) -> None:
 
 def _first_pending_link(link_info: dict, *, lives: bool = False) -> Optional[tuple[str, dict]]:
     """Prefer ambiguous-with-candidates, then unknown-with-candidates."""
-    dimensions = LIVES_LINK_DIMENSIONS if lives else LINK_DIMENSIONS
+    dimensions = LIVES_CORE_LINK_DIMENSIONS if lives else LINK_DIMENSIONS
     for status in ("ambiguous", "unknown"):
         for dimension in dimensions:
             info = link_info.get(dimension) or {}
@@ -298,7 +311,9 @@ def _first_pending_link(link_info: dict, *, lives: bool = False) -> Optional[tup
 
 
 def _scoped_candidates(session: dict, dimension: str, fallback: list[str]) -> list[str]:
-    identity_slots = LIVES_LINK_DIMENSIONS if _is_lives(session) else IDENTITY_SLOTS
+    identity_slots = (
+        LIVES_CORE_LINK_DIMENSIONS if _is_lives(session) else IDENTITY_SLOTS
+    )
     filt = {
         k: v
         for k, v in session["linked"].items()
@@ -311,6 +326,59 @@ def _scoped_candidates(session: dict, dimension: str, fallback: list[str]) -> li
         overlap = [v for v in scoped if v in set(fallback)]
         return overlap or scoped
     return scoped
+
+
+def _territory_needs_clarification(session: dict) -> bool:
+    if not (_is_lives(session) or _is_joint(session)):
+        return False
+    slots = session.get("slots") or {}
+    if slots.get("territoryInvalid"):
+        return True
+    info = (session.get("link_info") or {}).get(TERRITORY_LINK_DIMENSION) or {}
+    return info.get("status") in ("ambiguous", "unknown")
+
+
+def _territory_clarify_response(session: dict, message: Optional[str] = None) -> dict:
+    slots = session.get("slots") or {}
+    existing_info = session["link_info"].get(TERRITORY_LINK_DIMENSION) or {}
+    raw = str(
+        slots.get("territoryInvalid")
+        or existing_info.get("raw")
+        or slots.get(TERRITORY_LINK_DIMENSION)
+        or ""
+    ).strip()
+    session["current_slot"] = "territoryName"
+    session["linked"].pop("territoryType", None)
+    session["linked"].pop("territoryName", None)
+    session["link_info"][TERRITORY_LINK_DIMENSION] = {
+        **existing_info,
+        "raw": raw,
+        "status": "ambiguous",
+        "candidates": list(LIVES_TERRITORY_OPTIONS),
+        "method": "territory:clarify",
+    }
+    return _with_intent(
+        session,
+        {
+            "status": "needs_input",
+            "session_id": session["session_id"],
+            "question": session["question"],
+            "message": message
+            or (
+                f"I couldn't resolve {raw!r} to a valid U.S. state. "
+                "Please select a state or National:"
+            ),
+            "current_slot": "territoryName",
+            "proposed_value": None,
+            "candidates": list(LIVES_TERRITORY_OPTIONS),
+            "input_mode": "dropdown",
+            "confirmed_slots": _confirmed_view(session),
+            "allow_skip": False,
+            "cascade": None,
+            "link_info": session["link_info"],
+            "records": [],
+        },
+    )
 
 
 def _linker_clarify_response(session: dict) -> dict:
@@ -361,6 +429,8 @@ def _linker_clarify_response(session: dict) -> dict:
 
     pending = _first_pending_link(session["link_info"], lives=_is_lives(session))
     if not pending:
+        if _territory_needs_clarification(session):
+            return _territory_clarify_response(session)
         return _after_identity_resolved(session)
 
     dimension, info = pending
@@ -384,7 +454,10 @@ def _linker_clarify_response(session: dict) -> dict:
         )
         return _after_identity_resolved(session)
 
-    label = dimension.replace("_", " ")
+    label = {
+        "population": "subtype",
+        "organization": "payer",
+    }.get(dimension, dimension.replace("_", " "))
     return _with_intent(
         session,
         {
@@ -718,6 +791,50 @@ def exact_match_turn(
             return _maybe_lives_coverage_then_complete(session)
 
         slot = session.get("current_slot")
+        if (
+            action == "provide"
+            and slot == TERRITORY_LINK_DIMENSION
+            and _territory_needs_clarification(session)
+        ):
+            pick = str(value).strip() if value is not None else ""
+            if is_national_territory(pick):
+                canonical = LIVES_DEFAULT_TERRITORY_NAME
+            else:
+                canonical = normalized_state_code(pick)
+                if canonical is None:
+                    return _territory_clarify_response(
+                        session,
+                        "Please select a valid U.S. state or National.",
+                    )
+
+            territory_catalog = load_territory_catalog_from_db()[
+                TERRITORY_LINK_DIMENSION
+            ]
+            if canonical not in territory_catalog:
+                return _territory_clarify_response(
+                    session,
+                    "That geography is not available in the lives data. "
+                    "Please select another state or National.",
+                )
+
+            slots = session["slots"]
+            slots[TERRITORY_LINK_DIMENSION] = canonical
+            slots["territory"] = canonical
+            slots["territoryInvalid"] = None
+            session["linked"][TERRITORY_LINK_DIMENSION] = canonical
+            apply_lives_defaults(
+                slots,
+                session["linked"],
+                territory_type_for_canonical(canonical),
+            )
+            session["current_slot"] = None
+            info = session["link_info"].get(TERRITORY_LINK_DIMENSION) or {}
+            info["status"] = "matched"
+            info["value"] = canonical
+            info["method"] = "user_confirm"
+            session["link_info"][TERRITORY_LINK_DIMENSION] = info
+            return _linker_clarify_response(session)
+
         if action == "provide" and slot:
             pick = str(value).strip() if value is not None else ""
             if not pick:
@@ -788,7 +905,11 @@ def exact_match_turn(
     slots = extract_slots(q, intent=intent)
     print(f"[exact_match_entity_linker] intent={intent} slots: {slots}")
     if intent == "lives":
-        catalogs = catalogs_with_lives_books()
+        catalogs = {
+            dimension: list(values)
+            for dimension, values in load_catalogs_from_db().items()
+        }
+        catalogs.update(load_territory_catalog_from_db())
         linked, link_info = link_slots(
             slots,
             method=ENTITY_LINK_METHOD,
@@ -796,11 +917,35 @@ def exact_match_turn(
             dimensions=LIVES_LINK_DIMENSIONS,
             fill_missing=False,
         )
-        apply_lives_defaults(slots, linked)
+        apply_lives_defaults(
+            slots,
+            linked,
+            territory_type_for_canonical(linked.get(TERRITORY_LINK_DIMENSION)),
+        )
     else:
-        linked, link_info = link_slots(slots, method=ENTITY_LINK_METHOD)
+        dimensions = TREATMENT_PLAN_LINK_DIMENSIONS
+        catalogs = None
         if intent == "joint":
-            apply_lives_defaults(slots, linked)
+            dimensions = JOINT_LINK_DIMENSIONS
+            catalogs = {
+                dimension: list(values)
+                for dimension, values in load_catalogs_from_db().items()
+            }
+            catalogs.update(load_territory_catalog_from_db())
+        linked, link_info = link_slots(
+            slots,
+            method=ENTITY_LINK_METHOD,
+            catalogs=catalogs,
+            dimensions=dimensions,
+        )
+        if intent == "joint":
+            apply_lives_defaults(
+                slots,
+                linked,
+                territory_type_for_canonical(
+                    linked.get(TERRITORY_LINK_DIMENSION)
+                ),
+            )
     if link_info:
         print(f"[exact_match_entity_linker] linked ({ENTITY_LINK_METHOD}): {link_info}")
 

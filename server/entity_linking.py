@@ -37,8 +37,19 @@ USE_SYNONYM_TABLE = os.getenv("ENTITY_LINK_USE_SYNONYMS", "0").lower() in (
     "yes",
 )
 
-# Slot fields we attempt to link
-LINK_DIMENSIONS = ("organization", "regimen", "indication", "book")
+# Identity fields can be inferred when omitted because they define the access
+# record's identity. Treatment-plan fields are canonicalized when supplied, but
+# missing values remain for the scoped coverage -> population -> line cascade.
+IDENTITY_LINK_DIMENSIONS = ("organization", "regimen", "indication", "book")
+TREATMENT_PLAN_LINK_DIMENSIONS = (
+    *IDENTITY_LINK_DIMENSIONS,
+    "coverage",
+    "population",
+    "line",
+)
+LINK_DIMENSIONS = TREATMENT_PLAN_LINK_DIMENSIONS
+TERRITORY_LINK_DIMENSION = "territoryName"
+SYNONYM_DIMENSIONS = (*LINK_DIMENSIONS, TERRITORY_LINK_DIMENSION)
 
 FUZZY_ACCEPT_THRESHOLD = 85.0
 FUZZY_AMBIGUOUS_GAP = 5.0
@@ -80,6 +91,9 @@ def _shares_distinctive_token(mention: str, candidate: str) -> bool:
 
 _catalog_cache: dict[str, list[str]] = {}
 _catalog_loaded_at: float = 0.0
+_territory_catalog_cache: dict[str, list[str]] = {}
+_territory_type_cache: dict[str, str] = {}
+_territory_catalog_loaded_at: float = 0.0
 CATALOG_TTL_SEC = 300.0
 
 _synonym_cache: dict[str, dict[str, str]] = {}
@@ -101,6 +115,14 @@ def normalize_key(text: str) -> str:
     return text.strip()
 
 
+def normalize_dimension_key(dimension: str, text: str) -> str:
+    """Normalize without erasing clinically meaningful plus modifiers."""
+    key = normalize_key(text)
+    if dimension in ("population", "line") and "+" in text:
+        key = f"{key} plus"
+    return key
+
+
 def _fuzzy_score(a: str, b: str) -> float:
     try:
         from rapidfuzz import fuzz
@@ -113,7 +135,7 @@ def _fuzzy_score(a: str, b: str) -> float:
 
 
 def _empty_synonym_map() -> dict[str, dict[str, str]]:
-    return {d: {} for d in LINK_DIMENSIONS}
+    return {dimension: {} for dimension in SYNONYM_DIMENSIONS}
 
 
 def load_synonyms_from_json(path: Path = SYNONYMS_PATH) -> dict[str, dict[str, str]]:
@@ -137,7 +159,7 @@ def load_synonyms_from_json(path: Path = SYNONYMS_PATH) -> dict[str, dict[str, s
         for alias, canonical in pairs.items():
             if not isinstance(alias, str) or not isinstance(canonical, str):
                 continue
-            out[dimension][normalize_key(alias)] = canonical
+            out[dimension][normalize_dimension_key(dimension, alias)] = canonical
     return out
 
 
@@ -195,7 +217,9 @@ def load_synonyms(force: bool = False) -> dict[str, dict[str, str]]:
                     and isinstance(canonical, str)
                     and canonical.strip()
                 ):
-                    out[dimension][alias_key] = canonical
+                    out[dimension][
+                        normalize_dimension_key(dimension, alias_key)
+                    ] = canonical
             _synonym_cache = out
             _synonym_loaded_at = now
             return out
@@ -227,9 +251,9 @@ def upsert_synonym(
 
     Only call after explicit user confirmation (not silent hyp accepts).
     """
-    if dimension not in LINK_DIMENSIONS:
+    if dimension not in SYNONYM_DIMENSIONS:
         raise ValueError(f"Unsupported synonym dimension: {dimension}")
-    alias_key = normalize_key(alias)
+    alias_key = normalize_dimension_key(dimension, alias)
     canonical = str(canonical).strip()
     if not alias_key or not canonical:
         raise ValueError("alias and canonical are required")
@@ -280,15 +304,113 @@ def load_catalogs_from_db(force: bool = False) -> dict[str, list[str]]:
 
     db = get_db()
     col = db.payerLatestAccess
-    catalogs: dict[str, list[str]] = {}
-    for dimension in LINK_DIMENSIONS:
+    # Build all dimension catalogs in one Mongo round trip. The cache keeps this
+    # off the per-question path; one unwind/group is cheaper in network calls
+    # than issuing seven separate distinct() operations.
+    pairs = [
+        {"dimension": dimension, "value": f"${dimension}"}
+        for dimension in LINK_DIMENSIONS
+    ]
+    rows = list(
+        col.aggregate(
+            [
+                {"$project": {"_id": 0, "pairs": pairs}},
+                {"$unwind": "$pairs"},
+                {
+                    "$match": {
+                        "pairs.value": {
+                            "$type": "string",
+                            "$nin": ["", None],
+                        }
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": "$pairs.dimension",
+                        "values": {"$addToSet": "$pairs.value"},
+                    }
+                },
+            ]
+        )
+    )
+    catalogs: dict[str, list[str]] = {dimension: [] for dimension in LINK_DIMENSIONS}
+    for row in rows:
+        dimension = row.get("_id")
+        if dimension not in catalogs:
+            continue
         values = [
-            v for v in col.distinct(dimension) if isinstance(v, str) and v.strip()
+            value
+            for value in row.get("values") or []
+            if isinstance(value, str) and value.strip()
         ]
         catalogs[dimension] = sorted(set(values), key=str.casefold)
     _catalog_cache = catalogs
     _catalog_loaded_at = now
     return catalogs
+
+
+def load_territory_catalog_from_db(force: bool = False) -> dict[str, list[str]]:
+    """Load canonical territory names and types from payerLatestLives (cached)."""
+    global _territory_catalog_cache
+    global _territory_type_cache
+    global _territory_catalog_loaded_at
+
+    now = time.time()
+    if (
+        not force
+        and _territory_catalog_cache
+        and (now - _territory_catalog_loaded_at) < CATALOG_TTL_SEC
+    ):
+        return _territory_catalog_cache
+
+    from db import get_db
+
+    rows = list(
+        get_db().payerLatestLives.aggregate(
+            [
+                {
+                    "$match": {
+                        "territoryName": {
+                            "$type": "string",
+                            "$nin": ["", None],
+                        },
+                        "territoryType": {
+                            "$type": "string",
+                            "$nin": ["", None],
+                        },
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": {
+                            "name": "$territoryName",
+                            "type": "$territoryType",
+                        }
+                    }
+                },
+            ]
+        )
+    )
+    territory_types = {
+        row["_id"]["name"]: row["_id"]["type"]
+        for row in rows
+        if isinstance((row.get("_id") or {}).get("name"), str)
+        and isinstance((row.get("_id") or {}).get("type"), str)
+    }
+    _territory_catalog_cache = {
+        TERRITORY_LINK_DIMENSION: sorted(territory_types, key=str.casefold)
+    }
+    _territory_type_cache = territory_types
+    _territory_catalog_loaded_at = now
+    return _territory_catalog_cache
+
+
+def territory_type_for_canonical(value: Optional[str]) -> Optional[str]:
+    """Return the lives-backed type for a canonical territory value."""
+    if not value:
+        return None
+    load_territory_catalog_from_db()
+    return _territory_type_cache.get(value)
 
 
 def set_catalogs(catalogs: dict[str, list[str]]) -> None:
@@ -388,11 +510,13 @@ def resolve_catalog(
 ) -> dict[str, Any]:
     catalogs = catalogs or load_catalogs_from_db()
     values = catalogs.get(dimension) or []
-    key = normalize_key(mention)
-    by_key = {normalize_key(v): v for v in values}
+    key = normalize_dimension_key(dimension, mention)
+    by_key = {normalize_dimension_key(dimension, value): value for value in values}
     if key in by_key:
         value = by_key[key]
-        dominant = _prefer_dominant_canonical(dimension, value, catalogs)
+        dominant = None
+        if dimension in IDENTITY_LINK_DIMENSIONS:
+            dominant = _prefer_dominant_canonical(dimension, value, catalogs)
         if dominant:
             return _result("matched", value=dominant, method="catalog:dominant")
         return _result("matched", value=value, method="catalog")
@@ -401,10 +525,70 @@ def resolve_catalog(
 
 def resolve_synonym(dimension: str, mention: str) -> dict[str, Any]:
     synonyms = load_synonyms().get(dimension) or {}
-    key = normalize_key(mention)
+    key = normalize_dimension_key(dimension, mention)
     if key in synonyms:
         return _result("matched", value=synonyms[key], method="synonym")
     return _result("unknown", method="synonym")
+
+
+def resolve_fuzzy_synonym(
+    dimension: str,
+    mention: str,
+    catalogs: dict[str, list[str]],
+    *,
+    accept_threshold: float = FUZZY_ACCEPT_THRESHOLD,
+    ambiguous_gap: float = FUZZY_AMBIGUOUS_GAP,
+) -> dict[str, Any]:
+    """Fuzzy-match alias text, then verify its canonical target in the catalog."""
+    mention_key = normalize_dimension_key(dimension, mention)
+    synonyms = load_synonyms().get(dimension) or {}
+    best_by_canonical: dict[str, tuple[float, str]] = {}
+    for alias_key, canonical in synonyms.items():
+        verified = _verify_in_catalog(dimension, canonical, catalogs)
+        if not verified:
+            continue
+        score = _fuzzy_score(mention_key, alias_key)
+        previous = best_by_canonical.get(verified)
+        if previous is None or score > previous[0]:
+            best_by_canonical[verified] = (score, alias_key)
+
+    ranked = sorted(
+        best_by_canonical.items(),
+        key=lambda item: item[1][0],
+        reverse=True,
+    )
+    if not ranked:
+        return _result("unknown", method="fuzzy_synonym")
+
+    top = ranked[:3]
+    candidates = [canonical for canonical, _ in top]
+    scores = {
+        canonical: round(score_alias[0], 2)
+        for canonical, score_alias in top
+    }
+    best_canonical, (best_score, _) = top[0]
+    second_score = top[1][1][0] if len(top) > 1 else 0.0
+    if best_score < accept_threshold:
+        return _result(
+            "unknown",
+            candidates=candidates,
+            scores=scores,
+            method="fuzzy_synonym",
+        )
+    if len(top) > 1 and (best_score - second_score) < ambiguous_gap:
+        return _result(
+            "ambiguous",
+            candidates=candidates,
+            scores=scores,
+            method="fuzzy_synonym",
+        )
+    return _result(
+        "matched",
+        value=best_canonical,
+        candidates=candidates,
+        scores=scores,
+        method="fuzzy_synonym",
+    )
 
 
 def resolve_fuzzy(
@@ -420,12 +604,14 @@ def resolve_fuzzy(
     if not values:
         return _result("unknown", method="fuzzy")
 
-    mention_key = normalize_key(mention)
+    mention_key = normalize_dimension_key(dimension, mention)
     scored = []
     for v in values:
         if not _shares_distinctive_token(mention, v):
             continue
-        scored.append((v, _fuzzy_score(mention_key, normalize_key(v))))
+        scored.append(
+            (v, _fuzzy_score(mention_key, normalize_dimension_key(dimension, v)))
+        )
     scored.sort(key=lambda x: x[1], reverse=True)
     if not scored:
         return _result("unknown", method="fuzzy")
@@ -641,9 +827,9 @@ def resolve_cascade(
     catalogs: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, Any]:
     """
-    Production cascade (Cursor path productized):
-      synonym -> catalog -> hypothesize+Mongo-verify
-      -> full-catalog dropdown clarify (never fuzzy chips)
+    Production cascade:
+      normal dimensions: synonym -> catalog -> hypothesize+Mongo-verify
+      territoryName: synonym -> catalog -> fuzzy synonym -> clarify
 
     Synonym runs first so curated aliases win over literal catalog strings
     (e.g. Mongo contains both "Anthem" and "Anthem (Elevance Health)").
@@ -674,6 +860,30 @@ def resolve_cascade(
     if r["status"] == "matched":
         r["method"] = "cascade:catalog"
         return r
+
+    if dimension == TERRITORY_LINK_DIMENSION:
+        r = resolve_fuzzy_synonym(dimension, mention, catalogs)
+        if r["status"] == "matched":
+            r["method"] = "cascade:fuzzy_synonym"
+            return r
+        if r["status"] == "ambiguous" and r.get("candidates"):
+            return _result(
+                "ambiguous",
+                candidates=list(r["candidates"]),
+                scores=r.get("scores"),
+                method="cascade:clarify",
+            )
+        values = sorted(
+            catalogs.get(dimension) or [],
+            key=lambda value: str(value).casefold(),
+        )
+        if values:
+            return _result(
+                "ambiguous",
+                candidates=values,
+                method="cascade:clarify",
+            )
+        return _result("unknown", method="cascade")
 
     r = resolve_hypothesize_verify(dimension, mention, catalogs)
     if r["status"] == "matched":
@@ -1082,7 +1292,7 @@ def _permissioned_distinct_for_slot(
     dimension: str,
     linked: dict,
     *,
-    dimensions: tuple[str, ...] = LINK_DIMENSIONS,
+    dimensions: tuple[str, ...] = IDENTITY_LINK_DIMENSIONS,
 ) -> list[str]:
     """Permission-scoped distinct values for a slot under already-resolved identity.
 
@@ -1107,7 +1317,7 @@ def _permissioned_distinct_for_slot(
 def _fill_missing_slots_from_permissioned_distinct(
     linked: dict,
     info: dict[str, dict],
-    dimensions: tuple[str, ...] = LINK_DIMENSIONS,
+    dimensions: tuple[str, ...] = IDENTITY_LINK_DIMENSIONS,
 ) -> None:
     """For null identity slots: clarify if >1 permissioned value, else auto-sole.
 
@@ -1143,36 +1353,23 @@ def _fill_missing_slots_from_permissioned_distinct(
                 progress = True
 
 
-def catalogs_with_lives_books() -> dict[str, list[str]]:
-    """Access catalogs plus book values that exist only on payerLatestLives (e.g. Medicaid)."""
-    catalogs = {k: list(v) for k, v in load_catalogs_from_db().items()}
-    from db import get_db
-
-    extra = [
-        v
-        for v in get_db().payerLatestLives.distinct("book")
-        if isinstance(v, str) and v.strip()
-    ]
-    catalogs["book"] = sorted(
-        set(catalogs.get("book") or []) | set(extra), key=str.casefold
-    )
-    return catalogs
-
-
 def link_slots(
     slots: dict,
     method: str = "cascade",
     catalogs: Optional[dict[str, list[str]]] = None,
     dimensions: tuple[str, ...] = LINK_DIMENSIONS,
     fill_missing: bool = True,
+    fill_missing_dimensions: Optional[tuple[str, ...]] = None,
 ) -> tuple[dict, dict[str, dict]]:
     """
     Canonicalize linkable slots. Returns (linked_slots, per_field_resolve_info).
     Ambiguous/unknown fields keep the original mention (exact find may miss).
 
-    After per-mention resolution: any still-null identity slot is filled from
-    permissioned distinct values under the resolved slots. Multiple values →
-    clarify; exactly one → auto-infer and proceed.
+    After per-mention resolution: still-null identity slots are filled from
+    permissioned distinct values under the resolved slots. Supplied coverage,
+    population, and line are canonicalized, but missing treatment-plan values
+    remain for the scoped cascade. Multiple identity values → clarify; exactly
+    one → auto-infer and proceed.
     """
     if method == "none":
         return dict(slots), {}
@@ -1192,5 +1389,15 @@ def link_slots(
             linked[dimension] = result["value"]
 
     if fill_missing:
-        _fill_missing_slots_from_permissioned_distinct(linked, info, dimensions)
+        if fill_missing_dimensions is None:
+            fill_missing_dimensions = tuple(
+                dimension
+                for dimension in dimensions
+                if dimension in IDENTITY_LINK_DIMENSIONS
+            )
+        _fill_missing_slots_from_permissioned_distinct(
+            linked,
+            info,
+            fill_missing_dimensions,
+        )
     return linked, info
