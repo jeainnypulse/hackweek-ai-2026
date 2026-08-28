@@ -64,7 +64,12 @@ def _finalize_ask(
 ) -> dict:
     intent = intent or "access"
     if answer is None:
-        answer, citations = synthesize_answer(question, records, intent=intent)
+        answer, citations = synthesize_answer(
+            question,
+            records,
+            intent=intent,
+            confirmed_slots=confirmed_slots,
+        )
     else:
         citations = list(citations or [])
     result_id = str(uuid.uuid4())

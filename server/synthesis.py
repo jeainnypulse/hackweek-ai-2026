@@ -116,6 +116,7 @@ def synthesize_answer(
     question: str,
     records: list[dict],
     intent: str = "access",
+    confirmed_slots: Optional[dict] = None,
 ) -> tuple[str, list[str]]:
     joint = intent == "joint"
     lives = (not joint) and (
@@ -148,11 +149,19 @@ def synthesize_answer(
         context_parts.append(json.dumps(r, default=str))
 
     context = "\n".join(context_parts)
+    canonical_context = json.dumps(confirmed_slots or {}, default=str)
+    request_context = f"""Original question: {question}
+
+Confirmed canonical request slots:
+{canonical_context}
+
+Use the confirmed canonical slot values in the answer instead of aliases,
+misspellings, or unresolved names from the original question."""
     if joint:
         system = JOINT_SYSTEM_PROMPT
         prompt = f"""Answer in two plain-text sentences only. No markdown. Access fact first, then lives fact.
 
-Question: {question}
+{request_context}
 
 Records:
 {context}"""
@@ -161,7 +170,7 @@ Records:
         system = LIVES_SYSTEM_PROMPT
         prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the lives count and percent directly.
 
-Question: {question}
+{request_context}
 
 Records:
 {context}"""
@@ -170,7 +179,7 @@ Records:
         system = ACCESS_SYSTEM_PROMPT
         prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the access level and score directly.
 
-Question: {question}
+{request_context}
 
 Records:
 {context}"""
