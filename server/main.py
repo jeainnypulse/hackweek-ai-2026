@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import uuid
-from typing import Optional, Union
+from typing import Literal, Optional
 
 load_dotenv()
 
@@ -26,8 +26,8 @@ class AskRequest(BaseModel):
     question: str = ""
     skip_log: bool = False
     session_id: Optional[str] = None
-    action: Optional[str] = None  # provide | skip | cascade_options | submit_cascade
-    value: Optional[Union[str, dict]] = None
+    action: Optional[Literal["provide"]] = None
+    value: Optional[str] = None
 
 
 class FeedbackRequest(BaseModel):
@@ -151,7 +151,6 @@ def ask(req: AskRequest):
             "confirmed_slots": turn.get("confirmed_slots") or {},
             "allow_skip": bool(turn.get("allow_skip")),
             "input_mode": turn.get("input_mode") or "dropdown",
-            "cascade": turn.get("cascade"),
             "link_info": turn.get("link_info") or {},
             "answer": turn.get("message"),
             "citations": [],

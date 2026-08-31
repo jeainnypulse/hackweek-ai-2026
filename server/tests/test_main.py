@@ -96,7 +96,6 @@ class MainApiTests(unittest.TestCase):
             "confirmed_slots": {"book": "Medicare"},
             "allow_skip": False,
             "input_mode": "dropdown",
-            "cascade": None,
             "link_info": {"organization": {"status": "ambiguous"}},
             "intent": "access",
         }
@@ -117,13 +116,14 @@ class MainApiTests(unittest.TestCase):
 
     def test_ask_continuation_forwards_action_payload(self):
         turn = {
-            "status": "needs_cascade_input",
+            "status": "needs_input",
             "session_id": "session-1",
             "question": "Is it covered?",
-            "cascade": {"pending_slots": ["coverage"]},
+            "current_slot": "coverage",
+            "candidates": ["Medical", "Pharmacy"],
             "intent": "access",
         }
-        value = {"coverage": "Medical"}
+        value = "Medical"
 
         with patch(
             "main.handle_conversation_turn", return_value=turn
@@ -131,17 +131,17 @@ class MainApiTests(unittest.TestCase):
             result = main.ask(
                 main.AskRequest(
                     session_id="session-1",
-                    action="cascade_options",
+                    action="provide",
                     value=value,
                 )
             )
 
         handle_turn.assert_called_once_with(
             session_id="session-1",
-            action="cascade_options",
+            action="provide",
             value=value,
         )
-        self.assertEqual(result["status"], "needs_cascade_input")
+        self.assertEqual(result["status"], "needs_input")
         self.assertEqual(result["input_mode"], "dropdown")
 
     def test_ask_complete_contract_includes_session_and_link_info(self):
@@ -210,10 +210,12 @@ class MainApiTests(unittest.TestCase):
         self.assertEqual(logged["records_retrieved"], 0)
 
     def test_ask_request_has_no_retrieval_method_field(self):
+        schema = main.AskRequest.model_json_schema()["properties"]
         self.assertNotIn(
             "retrieval_method",
-            main.AskRequest.model_json_schema()["properties"],
+            schema,
         )
+        self.assertEqual(schema["action"]["anyOf"][0]["const"], "provide")
 
     def test_empty_request_is_rejected(self):
         with self.assertRaises(HTTPException) as raised:

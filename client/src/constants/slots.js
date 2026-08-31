@@ -6,6 +6,7 @@ export const SLOT_LABELS = {
   organization: 'Payer',
   population: 'Subtype',
   line: 'Line of therapy',
+  territoryName: 'Territory',
 }
 
 export const SLOT_DISPLAY_ORDER = [
@@ -16,12 +17,5 @@ export const SLOT_DISPLAY_ORDER = [
   'coverage',
   'population',
   'line',
+  'territoryName',
 ]
-
-export function emptyCascadeSelections() {
-  return {
-    coverage: '',
-    population: '',
-    line: '',
-  }
-}

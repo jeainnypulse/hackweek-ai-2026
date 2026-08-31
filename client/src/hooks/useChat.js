@@ -6,7 +6,6 @@ import {
   formatApiError,
   sendFeedback,
 } from '../api/chatApi'
-import { emptyCascadeSelections } from '../constants/slots'
 
 export default function useChat() {
   const [question, setQuestion] = useState('')
@@ -16,34 +15,16 @@ export default function useChat() {
   const [history, setHistory] = useState([])
   const [sessionId, setSessionId] = useState(null)
   const [slotInput, setSlotInput] = useState('')
-  const [cascadeSelections, setCascadeSelections] = useState(
-    emptyCascadeSelections,
-  )
 
   const awaitingInput =
     result?.status === 'needs_input' || result?.status === 'error'
-  const awaitingCascade = result?.status === 'needs_cascade_input'
-  const inConversation =
-    Boolean(sessionId) && (awaitingInput || awaitingCascade)
-
-  function syncCascadeSelections(data) {
-    const selections = data?.cascade?.selections || {}
-    setCascadeSelections({
-      coverage: selections.coverage || '',
-      population: selections.population || '',
-      line: selections.line || '',
-    })
-  }
+  const inConversation = Boolean(sessionId) && awaitingInput
 
   function applyAskResponse(data, originalQuestion) {
     setResult(data)
-    if (data.status === 'needs_cascade_input') {
-      syncCascadeSelections(data)
-    }
     if (data.status === 'complete') {
       setSessionId(null)
       setSlotInput('')
-      setCascadeSelections(emptyCascadeSelections())
       setHistory(previous => [
         {
           question: originalQuestion || data.question,
@@ -64,7 +45,6 @@ export default function useChat() {
     setResult(null)
     setSessionId(null)
     setSlotInput('')
-    setCascadeSelections(emptyCascadeSelections())
     const asked = question.trim()
 
     try {
@@ -78,7 +58,7 @@ export default function useChat() {
     }
   }
 
-  async function sendSessionAction(action, value = null) {
+  async function provideSlot(value) {
     if (!sessionId) return
 
     setLoading(true)
@@ -87,7 +67,6 @@ export default function useChat() {
       const data = await continueConversation({
         question: result?.question || '',
         sessionId,
-        action,
         value,
       })
       setSlotInput('')
@@ -101,39 +80,13 @@ export default function useChat() {
 
   async function submitSlotValue() {
     if (!slotInput.trim()) return
-    await sendSessionAction('provide', slotInput.trim())
-  }
-
-  async function onCascadeChange(field, value) {
-    let next = { ...cascadeSelections, [field]: value }
-    if (field === 'coverage') {
-      next = { coverage: value, population: '', line: '' }
-    } else if (field === 'population') {
-      next = { ...next, line: '' }
-    }
-    setCascadeSelections(next)
-    await sendSessionAction('cascade_options', next)
-  }
-
-  async function submitCascade() {
-    await sendSessionAction('submit_cascade', cascadeSelections)
-  }
-
-  function cascadeReady() {
-    const pending = result?.cascade?.pending_slots || []
-    if (pending.includes('coverage') && !cascadeSelections.coverage) return false
-    if (pending.includes('population') && !cascadeSelections.population) {
-      return false
-    }
-    if (pending.includes('line') && !cascadeSelections.line) return false
-    return pending.length > 0 || Boolean(cascadeSelections.coverage)
+    await provideSlot(slotInput.trim())
   }
 
   function startOver() {
     setSessionId(null)
     setResult(null)
     setSlotInput('')
-    setCascadeSelections(emptyCascadeSelections())
   }
 
   function showHistoryItem(item) {
@@ -149,16 +102,10 @@ export default function useChat() {
     history,
     slotInput,
     setSlotInput,
-    cascadeSelections,
     awaitingInput,
-    awaitingCascade,
     inConversation,
     ask,
-    sendSessionAction,
     submitSlotValue,
-    onCascadeChange,
-    submitCascade,
-    cascadeReady,
     submitFeedback: sendFeedback,
     startOver,
     showHistoryItem,

@@ -205,13 +205,13 @@ def build_rows(access_records: list[dict], lives_records: list[dict]) -> list[di
     for record in national_lives:
         lives_coverages[(record["slug"], record["book"])].add(record["coverage"])
         lives_books[(record["slug"], record["coverage"])].add(record["book"])
-    lives_cascade = _first(
+    lives_faceted = _first(
         (
             record
             for record in national_lives
             if len(lives_coverages[(record["slug"], record["book"])]) > 1
         ),
-        "lives coverage cascade",
+        "lives coverage clarification",
     )
     lives_clarify = _first(
         (
@@ -283,7 +283,7 @@ def build_rows(access_records: list[dict], lives_records: list[dict]) -> list[di
                 book=access["book"],
             ),
             "expected_lives": "",
-            "eval_notes": "Latest access identity; sole cascade values auto-complete.",
+            "eval_notes": "Sole permission-scoped facet values auto-complete.",
         },
         {
             "type": "access_lookup",
@@ -344,19 +344,19 @@ def build_rows(access_records: list[dict], lives_records: list[dict]) -> list[di
         },
         {
             "type": "lives_lookup",
-            "sub_type": "data_cascade_coverage",
+            "sub_type": "data_clarify_coverage",
             "question": (
-                f"How many {lives_cascade['book']} lives does "
-                f"{organization(lives_cascade)} have nationally?"
+                f"How many {lives_faceted['book']} lives does "
+                f"{organization(lives_faceted)} have nationally?"
             ),
             "expected_intent": "lives",
-            "expected_behavior": "cascade",
+            "expected_behavior": "clarify",
             "expected_slots": _slots(
-                organization=organization(lives_cascade),
-                book=lives_cascade["book"],
-                source=lives_cascade["source"],
-                territoryType=lives_cascade["territoryType"],
-                territoryName=lives_cascade["territoryName"],
+                organization=organization(lives_faceted),
+                book=lives_faceted["book"],
+                source=lives_faceted["source"],
+                territoryType=lives_faceted["territoryType"],
+                territoryName=lives_faceted["territoryName"],
             ),
             "expected_lives": "",
             "eval_notes": "Latest lives group has multiple coverage values.",

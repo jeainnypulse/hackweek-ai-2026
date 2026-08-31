@@ -1,25 +1,18 @@
 import AnswerView from './AnswerView'
-import CascadeForm from './CascadeForm'
 import ClarificationForm from './ClarificationForm'
 
 export default function ResultCard({
   result,
   loading,
   slotInput,
-  cascadeSelections,
-  cascadeReady,
   onSlotInputChange,
   onSubmitSlot,
-  onSessionAction,
-  onCascadeChange,
-  onSubmitCascade,
   onFeedback,
   onStartOver,
 }) {
   if (!result) return null
 
   const isComplete = result.status === 'complete'
-  const isCascade = result.status === 'needs_cascade_input'
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
@@ -27,9 +20,7 @@ export default function ResultCard({
         <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">
           {isComplete
             ? 'Answer'
-            : isCascade
-              ? 'Additional details'
-              : 'Clarify slots'}
+            : 'Clarify slots'}
         </span>
         {isComplete && (
           <span className="text-xs text-gray-400">
@@ -49,15 +40,6 @@ export default function ResultCard({
 
       {isComplete ? (
         <AnswerView result={result} onFeedback={onFeedback} />
-      ) : isCascade ? (
-        <CascadeForm
-          result={result}
-          selections={cascadeSelections}
-          loading={loading}
-          ready={cascadeReady}
-          onChange={onCascadeChange}
-          onSubmit={onSubmitCascade}
-        />
       ) : (
         <ClarificationForm
           result={result}
@@ -65,7 +47,6 @@ export default function ResultCard({
           loading={loading}
           onSlotInputChange={onSlotInputChange}
           onSubmit={onSubmitSlot}
-          onSkip={() => onSessionAction('skip', null)}
           onStartOver={onStartOver}
         />
       )}

@@ -24,4 +24,8 @@ def _confirmed_view(session: dict) -> dict:
         key: value
         for key, value in (session.get("linked") or {}).items()
         if value is not None and value != ""
+        and (
+            not (session.get("link_info") or {}).get(key)
+            or (session["link_info"][key] or {}).get("status") == "matched"
+        )
     }

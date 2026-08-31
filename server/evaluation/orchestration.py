@@ -20,7 +20,7 @@ FALLBACK_CSV_PATH = EVAL_CSV_PATH
 EVAL_LIVES_CSV_PATH = EVAL_CSV_PATH
 
 VALID_INTENTS = frozenset({"access", "lives", "joint", "out_of_scope"})
-VALID_BEHAVIORS = frozenset({"complete", "cascade", "clarify", "refuse", "empty"})
+VALID_BEHAVIORS = frozenset({"complete", "clarify", "refuse", "empty"})
 
 
 def is_orchestration_item(item: dict) -> bool:
@@ -126,8 +126,6 @@ def observed_behavior(turn: dict) -> str:
         return "refuse"
     if status == "needs_input":
         return "clarify"
-    if status == "needs_cascade_input":
-        return "cascade"
     if status == "complete":
         if turn.get("records"):
             return "complete"
@@ -195,7 +193,7 @@ def compare_orchestration_result(item: dict, turn: dict) -> dict:
     elif expected_intent == "out_of_scope":
         behavior_match = observed == "refuse"
     elif expected_intent in ("access", "lives", "joint"):
-        # In-scope questions must not be refused as OOS. Clarify/cascade/complete/empty
+        # In-scope questions must not be refused as OOS. Clarify/complete/empty
         # are all acceptable unless expected_behavior is set.
         behavior_match = observed != "refuse"
     else:

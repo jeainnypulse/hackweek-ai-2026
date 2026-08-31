@@ -7,7 +7,6 @@ export default function ClarificationForm({
   loading,
   onSlotInputChange,
   onSubmit,
-  onSkip,
   onStartOver,
 }) {
   const hasConfirmedSlots =
@@ -59,16 +58,6 @@ export default function ClarificationForm({
                 >
                   {loading ? 'Looking up…' : 'Confirm'}
                 </button>
-                {result.allow_skip && (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={onSkip}
-                    className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-40"
-                  >
-                    Skip this field
-                  </button>
-                )}
               </div>
             </div>
           ) : (

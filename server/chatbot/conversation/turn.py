@@ -23,6 +23,7 @@ from chatbot.query_resolution.entity_linking import (
 from chatbot.slot_extract.access_extract import extract_access_slots
 from chatbot.slot_extract.joint_extract import extract_joint_slots
 from chatbot.slot_extract.lives_extract import (
+    LIVES_DEFAULT_SOURCE,
     apply_lives_defaults,
     extract_lives_slots,
 )
@@ -35,6 +36,40 @@ def extract_slots(question: str, intent: str = "access") -> dict:
     if intent == "joint":
         return extract_joint_slots(question)
     return extract_access_slots(question)
+
+
+def _prepare_lives_fields(slots: dict, linked: dict, link_info: dict) -> None:
+    """Preserve territory linking while applying the National default."""
+    linked["source"] = LIVES_DEFAULT_SOURCE
+    info = link_info.get(TERRITORY_LINK_DIMENSION) or {}
+    raw = slots.get(TERRITORY_LINK_DIMENSION)
+    invalid = slots.get("territoryInvalid")
+    if info.get("status") == "matched" and info.get("value"):
+        apply_lives_defaults(
+            slots,
+            linked,
+            territory_type_for_canonical(info["value"]),
+        )
+    elif not raw and not invalid:
+        apply_lives_defaults(slots, linked)
+        link_info[TERRITORY_LINK_DIMENSION] = {
+            "raw": None,
+            "status": "matched",
+            "value": linked[TERRITORY_LINK_DIMENSION],
+            "method": "lives:default",
+        }
+    else:
+        if invalid and not info:
+            link_info[TERRITORY_LINK_DIMENSION] = {
+                "raw": invalid,
+                "status": "unknown",
+                "candidates": [],
+                "method": "territory:invalid",
+            }
+        linked.pop(TERRITORY_LINK_DIMENSION, None)
+        linked.pop("territoryType", None)
+        linked.pop("territory", None)
+        linked.pop("territoryInvalid", None)
 
 
 def handle_conversation_turn(
@@ -55,7 +90,6 @@ def handle_conversation_turn(
             "candidates": [],
             "records": [],
             "confirmed_slots": {},
-            "cascade": None,
             "intent": None,
         }
 
@@ -69,7 +103,6 @@ def handle_conversation_turn(
             "confirmed_slots": {},
             "link_info": {},
             "candidates": [],
-            "cascade": None,
             "message": OUT_OF_SCOPE_MESSAGE,
             "current_slot": None,
             "intent": "out_of_scope",
@@ -90,13 +123,7 @@ def handle_conversation_turn(
             dimensions=LIVES_LINK_DIMENSIONS,
             fill_missing=False,
         )
-        apply_lives_defaults(
-            slots,
-            linked,
-            territory_type_for_canonical(
-                linked.get(TERRITORY_LINK_DIMENSION)
-            ),
-        )
+        _prepare_lives_fields(slots, linked, link_info)
     else:
         dimensions = TREATMENT_PLAN_LINK_DIMENSIONS
         catalogs = None
@@ -112,15 +139,10 @@ def handle_conversation_turn(
             method=ENTITY_LINK_METHOD,
             catalogs=catalogs,
             dimensions=dimensions,
+            fill_missing=False,
         )
         if intent == "joint":
-            apply_lives_defaults(
-                slots,
-                linked,
-                territory_type_for_canonical(
-                    linked.get(TERRITORY_LINK_DIMENSION)
-                ),
-            )
+            _prepare_lives_fields(slots, linked, link_info)
     if link_info:
         print(
             f"[conversation] linked "
@@ -137,7 +159,6 @@ def handle_conversation_turn(
         "link_info": link_info,
         "pending_writebacks": [],
         "current_slot": None,
-        "cascade": None,
     }
     _sessions[session_id] = session
 

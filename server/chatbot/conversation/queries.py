@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from infrastructure.db import get_db
-from chatbot.conversation.state import _is_lives
+from chatbot.conversation.state import _is_joint, _is_lives
 from chatbot.permissions import scoped_lives_query, scoped_query
 from chatbot.query_resolution.cascade_clarify import distinct_values
 from chatbot.slot_extract.lives_extract import (
@@ -72,8 +72,23 @@ def _lives_mongo_filter(
 
 
 def _distinct_for_session(session: dict, field: str, filt: dict) -> list[str]:
-    if not _is_lives(session):
-        return distinct_values(field, filt)
+    use_lives = _is_lives(session) or (
+        _is_joint(session) and field == "territoryName"
+    )
+    if not use_lives:
+        access_filter = {
+            key: value
+            for key, value in filt.items()
+            if key
+            not in {
+                "territory",
+                "territoryType",
+                "territoryName",
+                "source",
+                "collection",
+            }
+        }
+        return distinct_values(field, access_filter)
     if field == "organization":
         lives_filter = _lives_mongo_filter(
             filt, drop_fields={"organization", "slug"}
@@ -85,9 +100,10 @@ def _distinct_for_session(session: dict, field: str, filt: dict) -> list[str]:
             scoped_fn=scoped_lives_query,
         )
         return _orgs_for_slugs(slugs)
-    lives_filter = _lives_mongo_filter(
-        filt, drop_fields={field, "organization"}
-    )
+    drop_fields = {field, "organization"}
+    if field == "territoryName":
+        drop_fields.add("territoryType")
+    lives_filter = _lives_mongo_filter(filt, drop_fields=drop_fields)
     if field != "slug" and filt.get("organization"):
         slug = _organization_to_slug(str(filt["organization"]))
         if slug:

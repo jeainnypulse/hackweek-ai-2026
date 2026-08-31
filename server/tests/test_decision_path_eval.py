@@ -55,14 +55,14 @@ class DecisionPathEvalTests(unittest.TestCase):
 
         self.assertEqual(
             {row["expected_behavior"] for row in rows},
-            {"complete", "clarify", "cascade", "empty", "refuse"},
+            {"complete", "clarify", "empty", "refuse"},
         )
         self.assertEqual(
             {row["expected_intent"] for row in rows},
             {"access", "lives", "joint", "out_of_scope"},
         )
         self.assertIn(
-            "data_cascade_coverage",
+            "data_clarify_coverage",
             {row["sub_type"] for row in rows},
         )
         self.assertIn(

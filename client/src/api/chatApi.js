@@ -33,13 +33,13 @@ export function askQuestion(question) {
   return postJson("/api/ask", { question }, "Something went wrong");
 }
 
-export function continueConversation({ question, sessionId, action, value }) {
+export function continueConversation({ question, sessionId, value }) {
   return postJson(
     "/api/ask",
     {
       question,
       session_id: sessionId,
-      action,
+      action: "provide",
       value,
     },
     "Something went wrong",

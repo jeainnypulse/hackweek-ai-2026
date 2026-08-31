@@ -30,13 +30,8 @@ export default function App() {
           result={chat.result}
           loading={chat.loading}
           slotInput={chat.slotInput}
-          cascadeSelections={chat.cascadeSelections}
-          cascadeReady={chat.cascadeReady()}
           onSlotInputChange={chat.setSlotInput}
           onSubmitSlot={chat.submitSlotValue}
-          onSessionAction={chat.sendSessionAction}
-          onCascadeChange={chat.onCascadeChange}
-          onSubmitCascade={chat.submitCascade}
           onFeedback={chat.submitFeedback}
           onStartOver={chat.startOver}
         />

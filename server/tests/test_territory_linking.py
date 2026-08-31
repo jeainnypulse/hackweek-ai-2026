@@ -9,10 +9,9 @@ from chatbot.query_resolution.entity_linking import (
     resolve_cascade,
 )
 from chatbot.query_resolution.linking import config
-from chatbot.conversation.actions import _territory_clarify_response
+from chatbot.conversation.resolution import resolve_next_slot
 from chatbot.slot_extract.lives_extract import (
     LIVES_DEFAULT_SOURCE,
-    LIVES_TERRITORY_OPTIONS,
     US_STATE_CODES,
     apply_lives_defaults,
     coerce_lives_territory_slot,
@@ -97,17 +96,29 @@ class TerritoryLinkingTests(unittest.TestCase):
             "question": "Aetna lives in Los Angeles",
             "intent": "lives",
             "slots": slots,
-            "linked": {},
-            "link_info": {},
+            "linked": {
+                "organization": "Aetna",
+                "book": "Commercial",
+                "source": "DRG",
+            },
+            "link_info": {
+                "organization": {"status": "matched", "value": "Aetna"},
+                "book": {"status": "matched", "value": "Commercial"},
+            },
         }
-        response = _territory_clarify_response(session)
+        options = {
+            "organization": ["Aetna"],
+            "book": ["Commercial"],
+            "territoryName": ["PR", "United States"],
+        }
+        with patch(
+            "chatbot.conversation.resolution._distinct_for_session",
+            side_effect=lambda _session, field, _filt: options[field],
+        ):
+            response = resolve_next_slot(session)
         self.assertEqual(response["status"], "needs_input")
-        self.assertIn("National", response["candidates"])
-        self.assertIn("Puerto Rico", response["candidates"])
-        self.assertEqual(
-            tuple(response["candidates"]),
-            LIVES_TERRITORY_OPTIONS,
-        )
+        self.assertEqual(response["current_slot"], "territoryName")
+        self.assertEqual(response["candidates"], ["PR", "United States"])
 
     def test_territory_raw_prefers_territory_name_and_ignores_null(self) -> None:
         self.assertEqual(
