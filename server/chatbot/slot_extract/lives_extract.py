@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from chatbot.retrieval.extract_utils import invoke_json_extract, slot_text
+from chatbot.slot_extract.utils import invoke_json_extract, slot_text
 
 LIVES_DEFAULT_SOURCE = "DRG"
 LIVES_DEFAULT_TERRITORY_TYPE = "National"
@@ -224,11 +224,7 @@ def coerce_lives_territory_slot(question: str, slots: dict) -> None:
     raw = territory_raw_from_slots(slots)
     extracted_invalid = slot_text(slots.get("territoryInvalid"))
     explicit_invalid = next(
-        (
-            phrase
-            for phrase in (*_CITY_PHRASES, *_REGION_PHRASES)
-            if phrase in key
-        ),
+        (phrase for phrase in (*_CITY_PHRASES, *_REGION_PHRASES) if phrase in key),
         None,
     )
 

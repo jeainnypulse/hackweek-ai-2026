@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from chatbot.retrieval.exact_match import exact_match_turn
-from chatbot.retrieval.intent import classify_intent
+from chatbot.answer_retrieval import handle_conversation_turn
+from chatbot.intent_classifier import classify_intent
 
 EVAL_CSV_PATH = (
     Path(__file__).resolve().parent.parent
@@ -268,7 +268,7 @@ def evaluate_orchestration_item(item: dict, *, classify_only: bool = False) -> d
             "error": None,
         }
 
-    turn = exact_match_turn(question=question)
+    turn = handle_conversation_turn(question=question)
     comparison = compare_orchestration_result(item, turn)
     answer = turn.get("message") or ""
     return {

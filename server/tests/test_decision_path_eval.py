@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from evaluation.orchestration import compare_orchestration_result
-from scripts.generate_decision_path_eval import build_rows
+from evaluation.generate_decision_path_eval import build_rows
 
 
 def _access(

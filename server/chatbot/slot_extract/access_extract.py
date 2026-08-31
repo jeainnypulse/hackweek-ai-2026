@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chatbot.retrieval.extract_utils import invoke_json_extract
+from chatbot.slot_extract.utils import invoke_json_extract
 
 ACCESS_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer question. Return ONLY valid JSON with no explanation or markdown.
 
@@ -19,6 +19,7 @@ Return format:
 {"regimen": "Spinraza", "indication": "Spinal Muscular Atrophy", "line": "1L", "book": "Managed Medicaid", "organization": "Health Net", "coverage": "Medical", "population": null}
 
 Question: """
+
 
 def extract_access_slots(question: str) -> dict:
     return invoke_json_extract(ACCESS_SLOT_EXTRACTION_PROMPT, question)

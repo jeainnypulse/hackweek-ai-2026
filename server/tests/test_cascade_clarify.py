@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 
-from chatbot.retrieval.cascade_clarify import (
+from chatbot.query_resolution.cascade_clarify import (
     auto_confirm_sole_cascade_options,
     build_cascade_state,
     cascade_needed,
@@ -97,7 +97,7 @@ class CascadeHelperTests(unittest.TestCase):
         scoped = Mock(return_value={"organization": {"$eq": "Aetna"}})
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.get_db",
+            "chatbot.query_resolution.cascade_clarify.get_db",
             return_value=database,
         ):
             result = distinct_values(
@@ -133,7 +133,7 @@ class BuildCascadeStateTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             state = build_cascade_state(
@@ -167,7 +167,7 @@ class BuildCascadeStateTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             state = build_cascade_state(
@@ -190,7 +190,7 @@ class BuildCascadeStateTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             state = build_cascade_state(IDENTITY)
@@ -225,7 +225,7 @@ class BuildCascadeStateTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             state = build_cascade_state(confirmed)
@@ -250,7 +250,7 @@ class BuildCascadeStateTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             state = build_cascade_state(IDENTITY)
@@ -261,7 +261,7 @@ class BuildCascadeStateTests(unittest.TestCase):
 class CascadeNeededTests(unittest.TestCase):
     def test_missing_coverage_is_needed_when_options_exist(self) -> None:
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             return_value=["Medical"],
         ) as distinct:
             self.assertTrue(cascade_needed(IDENTITY))
@@ -278,7 +278,7 @@ class CascadeNeededTests(unittest.TestCase):
             }.get(field, [])
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=fake,
         ):
             self.assertFalse(cascade_needed(confirmed))
@@ -286,7 +286,7 @@ class CascadeNeededTests(unittest.TestCase):
     def test_missing_population_with_real_subtype_is_needed(self) -> None:
         confirmed = {**IDENTITY, "coverage": "Medical"}
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=lambda field, _: ["EGFR+"] if field == "population" else [],
         ):
             self.assertTrue(cascade_needed(confirmed))
@@ -298,7 +298,7 @@ class CascadeNeededTests(unittest.TestCase):
             "population": "EGFR+",
         }
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=[["1L"]],
         ) as distinct:
             self.assertTrue(cascade_needed(confirmed))
@@ -316,7 +316,7 @@ class CascadeNeededTests(unittest.TestCase):
             "line": "1L",
         }
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values"
+            "chatbot.query_resolution.cascade_clarify.distinct_values"
         ) as distinct:
             self.assertFalse(cascade_needed(confirmed))
 
@@ -345,7 +345,7 @@ class AutoConfirmTests(unittest.TestCase):
         confirmed = dict(IDENTITY)
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             selections = auto_confirm_sole_cascade_options(confirmed)
@@ -376,7 +376,7 @@ class AutoConfirmTests(unittest.TestCase):
         confirmed = dict(IDENTITY)
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             selections = auto_confirm_sole_cascade_options(confirmed)
@@ -398,7 +398,7 @@ class AutoConfirmTests(unittest.TestCase):
         confirmed = dict(IDENTITY)
 
         with patch(
-            "chatbot.retrieval.cascade_clarify.distinct_values",
+            "chatbot.query_resolution.cascade_clarify.distinct_values",
             side_effect=_distinct_from(mapping),
         ):
             auto_confirm_sole_cascade_options(

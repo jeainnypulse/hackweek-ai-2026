@@ -3,14 +3,14 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock, patch
 
-from chatbot import entity_linking
-from chatbot.entity_linking import (
+from chatbot.query_resolution.entity_linking import (
     TERRITORY_LINK_DIMENSION,
     link_slots,
     load_catalogs_from_db,
     resolve_cascade,
     resolve_hypothesize_verify,
 )
+from chatbot.query_resolution.linking import config
 
 
 class CascadeResolutionTests(unittest.TestCase):
@@ -25,8 +25,11 @@ class CascadeResolutionTests(unittest.TestCase):
     def test_synonym_precedes_literal_catalog_match(self) -> None:
         synonyms = {"organization": {"anthem": "Anthem (Elevance Health)"}}
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", True),
-            patch("chatbot.entity_linking.load_synonyms", return_value=synonyms),
+            patch.object(config, "USE_SYNONYM_TABLE", True),
+            patch(
+                "chatbot.query_resolution.linking.synonyms.load_synonyms",
+                return_value=synonyms,
+            ),
         ):
             result = resolve_cascade("organization", "Anthem", self.catalogs)
 
@@ -42,8 +45,11 @@ class CascadeResolutionTests(unittest.TestCase):
     def test_synonym_target_not_in_catalog_is_still_returned(self) -> None:
         synonyms = {"organization": {"legacy payer": "Legacy Payer"}}
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", True),
-            patch("chatbot.entity_linking.load_synonyms", return_value=synonyms),
+            patch.object(config, "USE_SYNONYM_TABLE", True),
+            patch(
+                "chatbot.query_resolution.linking.synonyms.load_synonyms",
+                return_value=synonyms,
+            ),
         ):
             result = resolve_cascade("organization", "legacy payer", self.catalogs)
 
@@ -53,8 +59,10 @@ class CascadeResolutionTests(unittest.TestCase):
 
     def test_catalog_match_uses_canonical_casing_without_llm(self) -> None:
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
-            patch("chatbot.entity_linking.resolve_hypothesize_verify") as llm_resolver,
+            patch.object(config, "USE_SYNONYM_TABLE", False),
+            patch(
+                "chatbot.query_resolution.linking.hypothesis.resolve_hypothesize_verify"
+            ) as llm_resolver,
         ):
             result = resolve_cascade("coverage", " medical ", self.catalogs)
 
@@ -69,9 +77,9 @@ class CascadeResolutionTests(unittest.TestCase):
             "method": "hypothesize_verify",
         }
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
+            patch.object(config, "USE_SYNONYM_TABLE", False),
             patch(
-                "chatbot.entity_linking.resolve_hypothesize_verify",
+                "chatbot.query_resolution.linking.hypothesis.resolve_hypothesize_verify",
                 return_value=hyp_result,
             ),
         ):
@@ -83,9 +91,9 @@ class CascadeResolutionTests(unittest.TestCase):
 
     def test_ambiguous_llm_result_keeps_only_verified_candidates(self) -> None:
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
+            patch.object(config, "USE_SYNONYM_TABLE", False),
             patch(
-                "chatbot.entity_linking.resolve_hypothesize_verify",
+                "chatbot.query_resolution.linking.hypothesis.resolve_hypothesize_verify",
                 return_value={
                     "status": "ambiguous",
                     "candidates": ["Keytruda", "Keytruda (IV)"],
@@ -101,9 +109,9 @@ class CascadeResolutionTests(unittest.TestCase):
 
     def test_unresolved_mention_falls_back_to_sorted_full_catalog(self) -> None:
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
+            patch.object(config, "USE_SYNONYM_TABLE", False),
             patch(
-                "chatbot.entity_linking.resolve_hypothesize_verify",
+                "chatbot.query_resolution.linking.hypothesis.resolve_hypothesize_verify",
                 return_value={
                     "status": "unknown",
                     "method": "hypothesize_verify",
@@ -118,9 +126,9 @@ class CascadeResolutionTests(unittest.TestCase):
 
     def test_unresolved_mention_with_empty_catalog_is_unknown(self) -> None:
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
+            patch.object(config, "USE_SYNONYM_TABLE", False),
             patch(
-                "chatbot.entity_linking.resolve_hypothesize_verify",
+                "chatbot.query_resolution.linking.hypothesis.resolve_hypothesize_verify",
                 return_value={
                     "status": "unknown",
                     "method": "hypothesize_verify",
@@ -133,16 +141,18 @@ class CascadeResolutionTests(unittest.TestCase):
 
     def test_territory_fuzzy_match_never_calls_llm(self) -> None:
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
+            patch.object(config, "USE_SYNONYM_TABLE", False),
             patch(
-                "chatbot.entity_linking.resolve_fuzzy_synonym",
+                "chatbot.query_resolution.linking.catalog_match.resolve_fuzzy_synonym",
                 return_value={
                     "status": "matched",
                     "value": "CA",
                     "method": "fuzzy_synonym",
                 },
             ),
-            patch("chatbot.entity_linking.resolve_hypothesize_verify") as llm_resolver,
+            patch(
+                "chatbot.query_resolution.linking.hypothesis.resolve_hypothesize_verify"
+            ) as llm_resolver,
         ):
             result = resolve_cascade(
                 TERRITORY_LINK_DIMENSION, "Californa", self.catalogs
@@ -155,9 +165,9 @@ class CascadeResolutionTests(unittest.TestCase):
     def test_territory_fuzzy_ambiguity_preserves_scores(self) -> None:
         scores = {"NC": 92.0, "SC": 90.0}
         with (
-            patch.object(entity_linking, "USE_SYNONYM_TABLE", False),
+            patch.object(config, "USE_SYNONYM_TABLE", False),
             patch(
-                "chatbot.entity_linking.resolve_fuzzy_synonym",
+                "chatbot.query_resolution.linking.catalog_match.resolve_fuzzy_synonym",
                 return_value={
                     "status": "ambiguous",
                     "candidates": ["NC", "SC"],
@@ -255,7 +265,10 @@ class LinkSlotsTests(unittest.TestCase):
                 "method": "cascade:clarify",
             }
 
-        with patch("chatbot.entity_linking.resolve", side_effect=fake_resolve):
+        with patch(
+            "chatbot.query_resolution.linking.registry.resolve",
+            side_effect=fake_resolve,
+        ):
             linked, info = link_slots(
                 slots,
                 catalogs={"coverage": ["Medical"]},
@@ -269,7 +282,7 @@ class LinkSlotsTests(unittest.TestCase):
 
     def test_missing_identity_with_one_permissioned_value_is_auto_filled(self) -> None:
         with patch(
-            "chatbot.entity_linking._permissioned_distinct_for_slot",
+            "chatbot.query_resolution.linking.slot_linking._permissioned_distinct_for_slot",
             return_value=["Commercial"],
         ) as distinct:
             linked, info = link_slots(
@@ -285,7 +298,7 @@ class LinkSlotsTests(unittest.TestCase):
 
     def test_missing_identity_with_multiple_values_requires_clarification(self) -> None:
         with patch(
-            "chatbot.entity_linking._permissioned_distinct_for_slot",
+            "chatbot.query_resolution.linking.slot_linking._permissioned_distinct_for_slot",
             return_value=["Commercial", "Medicare"],
         ):
             linked, info = link_slots(
@@ -302,11 +315,11 @@ class LinkSlotsTests(unittest.TestCase):
     def test_supplied_unresolved_identity_is_not_auto_filled(self) -> None:
         with (
             patch(
-                "chatbot.entity_linking.resolve",
+                "chatbot.query_resolution.linking.registry.resolve",
                 return_value={"status": "unknown", "method": "cascade"},
             ),
             patch(
-                "chatbot.entity_linking._permissioned_distinct_for_slot",
+                "chatbot.query_resolution.linking.slot_linking._permissioned_distinct_for_slot",
                 return_value=["Commercial"],
             ) as distinct,
         ):

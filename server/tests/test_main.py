@@ -105,10 +105,12 @@ class MainApiTests(unittest.TestCase):
             "intent": "access",
         }
 
-        with patch("main.exact_match_turn", return_value=turn) as exact_match:
+        with patch(
+            "main.handle_conversation_turn", return_value=turn
+        ) as handle_turn:
             result = main.ask(main.AskRequest(question="  Is it covered?  "))
 
-        exact_match.assert_called_once_with(question="Is it covered?")
+        handle_turn.assert_called_once_with(question="Is it covered?")
         self.assertEqual(result["id"], None)
         self.assertEqual(result["status"], "needs_input")
         self.assertEqual(result["answer"], "Choose a payer.")
@@ -127,7 +129,9 @@ class MainApiTests(unittest.TestCase):
         }
         value = {"coverage": "Medical"}
 
-        with patch("main.exact_match_turn", return_value=turn) as exact_match:
+        with patch(
+            "main.handle_conversation_turn", return_value=turn
+        ) as handle_turn:
             result = main.ask(
                 main.AskRequest(
                     session_id="session-1",
@@ -136,7 +140,7 @@ class MainApiTests(unittest.TestCase):
                 )
             )
 
-        exact_match.assert_called_once_with(
+        handle_turn.assert_called_once_with(
             session_id="session-1",
             action="cascade_options",
             value=value,
@@ -156,7 +160,7 @@ class MainApiTests(unittest.TestCase):
         }
 
         with (
-            patch("main.exact_match_turn", return_value=turn),
+            patch("main.handle_conversation_turn", return_value=turn),
             patch(
                 "main.synthesize_answer",
                 return_value=("Yes.", [{"record": 1}]),
@@ -193,7 +197,7 @@ class MainApiTests(unittest.TestCase):
         db = MagicMock()
 
         with (
-            patch("main.exact_match_turn", return_value=turn),
+            patch("main.handle_conversation_turn", return_value=turn),
             patch("main.synthesize_answer") as synthesize,
             patch("main.get_db", return_value=db),
             patch("main.uuid.uuid4", return_value="result-4"),
@@ -210,7 +214,7 @@ class MainApiTests(unittest.TestCase):
         self.assertEqual(logged["records_retrieved"], 0)
 
     def test_unknown_retrieval_method_is_rejected_before_orchestration(self):
-        with patch("main.exact_match_turn") as exact_match:
+        with patch("main.handle_conversation_turn") as handle_turn:
             with self.assertRaises(HTTPException) as raised:
                 main.ask(
                     main.AskRequest(
@@ -221,7 +225,7 @@ class MainApiTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 400)
         self.assertIn("Unknown retrieval method", raised.exception.detail)
-        exact_match.assert_not_called()
+        handle_turn.assert_not_called()
 
     def test_empty_request_is_rejected(self):
         with self.assertRaises(HTTPException) as raised:
@@ -232,7 +236,7 @@ class MainApiTests(unittest.TestCase):
 
     def test_orchestration_failures_are_mapped_to_service_unavailable(self):
         with patch(
-            "main.exact_match_turn",
+            "main.handle_conversation_turn",
             side_effect=RuntimeError("database unavailable"),
         ):
             with self.assertRaises(HTTPException) as raised:

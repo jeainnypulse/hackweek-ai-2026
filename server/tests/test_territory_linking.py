@@ -3,13 +3,14 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from chatbot.entity_linking import (
+from chatbot.query_resolution.entity_linking import (
     TERRITORY_LINK_DIMENSION,
     load_synonyms_from_json,
     resolve_cascade,
 )
-from chatbot.retrieval.exact_match import _territory_clarify_response
-from chatbot.retrieval.lives_extract import (
+from chatbot.query_resolution.linking import config
+from chatbot.conversation.actions import _territory_clarify_response
+from chatbot.slot_extract.lives_extract import (
     LIVES_DEFAULT_SOURCE,
     LIVES_TERRITORY_OPTIONS,
     US_STATE_CODES,
@@ -35,8 +36,11 @@ class TerritoryLinkingTests(unittest.TestCase):
         }
 
     def resolve(self, mention: str) -> dict:
-        with patch("chatbot.entity_linking.load_synonyms", return_value=self.synonyms):
-            with patch("chatbot.entity_linking.USE_SYNONYM_TABLE", True):
+        with patch(
+            "chatbot.query_resolution.linking.synonyms.load_synonyms",
+            return_value=self.synonyms,
+        ):
+            with patch.object(config, "USE_SYNONYM_TABLE", True):
                 return resolve_cascade(
                     TERRITORY_LINK_DIMENSION,
                     mention,
@@ -249,7 +253,7 @@ class TerritoryLinkingTests(unittest.TestCase):
             "territoryInvalid": None,
         }
         with patch(
-            "chatbot.retrieval.lives_extract.invoke_json_extract",
+            "chatbot.slot_extract.lives_extract.invoke_json_extract",
             return_value=extracted,
         ) as invoke:
             result = extract_lives_slots(

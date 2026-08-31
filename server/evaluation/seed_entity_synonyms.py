@@ -3,8 +3,8 @@
 Seed Mongo entitySynonyms from data/entity_synonyms.json.
 
 Usage (from server/):
-  python scripts/seed_entity_synonyms.py
-  python scripts/seed_entity_synonyms.py --force   # overwrite existing seed rows
+  python evaluation/seed_entity_synonyms.py
+  python evaluation/seed_entity_synonyms.py --force
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 load_dotenv(SERVER_DIR / ".env")
 
-from chatbot.entity_linking import (  # noqa: E402
+from chatbot.query_resolution.entity_linking import (  # noqa: E402
     SYNONYMS_COLLECTION,
     SYNONYMS_PATH,
     ensure_synonym_indexes,

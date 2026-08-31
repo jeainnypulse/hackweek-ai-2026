@@ -3,18 +3,17 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from chatbot.retrieval.exact_match import (
+from chatbot.conversation.actions import _present_cascade
+from chatbot.conversation.flow import _linker_clarify_response
+from chatbot.conversation.identity import (
     _first_pending_link,
-    _lives_mongo_filter,
-    _linker_clarify_response,
-    _present_cascade,
-    _query_access_records,
     _refresh_missing_access_identity,
     _resolved_identity_filter,
     _scoped_candidates,
-    _sessions,
-    exact_match_turn,
 )
+from chatbot.conversation.queries import _lives_mongo_filter, _query_access_records
+from chatbot.conversation.state import _sessions
+from chatbot.conversation.turn import handle_conversation_turn
 
 
 def _session() -> dict:
@@ -57,7 +56,7 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         session = _session()
 
         with patch(
-            "chatbot.retrieval.exact_match._distinct_for_session",
+            "chatbot.conversation.identity._distinct_for_session",
             return_value=["CLL", "MCL"],
         ):
             response = _linker_clarify_response(session)
@@ -70,7 +69,7 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         session = _session()
 
         with patch(
-            "chatbot.retrieval.exact_match._distinct_for_session",
+            "chatbot.conversation.identity._distinct_for_session",
             return_value=["CLL"],
         ):
             _refresh_missing_access_identity(session)
@@ -115,7 +114,7 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         session = _session()
 
         with patch(
-            "chatbot.retrieval.exact_match._distinct_for_session",
+            "chatbot.conversation.identity._distinct_for_session",
             return_value=["CLL", "MCL"],
         ):
             candidates = _scoped_candidates(
@@ -134,7 +133,7 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.exact_match._organization_to_slug",
+            "chatbot.conversation.queries._organization_to_slug",
             return_value="aetna",
         ):
             query = _lives_mongo_filter(slots)
@@ -171,9 +170,9 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         }
 
         with (
-            patch("chatbot.retrieval.exact_match.get_db", return_value=db),
+            patch("chatbot.conversation.queries.get_db", return_value=db),
             patch(
-                "chatbot.retrieval.exact_match.scoped_query",
+                "chatbot.conversation.queries.scoped_query",
                 side_effect=lambda query: {"scoped": query},
             ) as scoped,
         ):
@@ -198,7 +197,7 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         }
 
         with patch(
-            "chatbot.retrieval.exact_match._distinct_for_session",
+            "chatbot.conversation.identity._distinct_for_session",
             return_value=["CLL", "MCL"],
         ):
             response = _linker_clarify_response(session)
@@ -229,11 +228,11 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
 
         with (
             patch(
-                "chatbot.retrieval.exact_match.auto_confirm_sole_cascade_options",
+                "chatbot.conversation.actions.auto_confirm_sole_cascade_options",
                 return_value={},
             ),
             patch(
-                "chatbot.retrieval.exact_match.build_cascade_state",
+                "chatbot.conversation.actions.build_cascade_state",
                 return_value=cascade,
             ),
         ):
@@ -246,7 +245,7 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         self.assertFalse(response["allow_skip"])
 
     def test_expired_session_action_returns_error(self):
-        response = exact_match_turn(
+        response = handle_conversation_turn(
             session_id="expired",
             action="provide",
             value="Tregzi",
@@ -268,10 +267,10 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         _sessions["test"] = session
 
         with patch(
-            "chatbot.retrieval.exact_match._linker_clarify_response",
+            "chatbot.conversation.flow._linker_clarify_response",
             return_value={"status": "next"},
         ):
-            response = exact_match_turn(
+            response = handle_conversation_turn(
                 session_id="test",
                 action="provide",
                 value="Tregzi",
@@ -300,10 +299,10 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         _sessions["test"] = session
 
         with patch(
-            "chatbot.retrieval.exact_match._linker_clarify_response",
+            "chatbot.conversation.flow._linker_clarify_response",
             return_value={"status": "next"},
         ):
-            response = exact_match_turn(
+            response = handle_conversation_turn(
                 session_id="test",
                 action="skip",
             )
@@ -319,10 +318,10 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
         _sessions["test"] = session
 
         with patch(
-            "chatbot.retrieval.exact_match._present_cascade",
+            "chatbot.conversation.actions._present_cascade",
             return_value={"status": "needs_cascade_input"},
         ) as present:
-            response = exact_match_turn(
+            response = handle_conversation_turn(
                 session_id="test",
                 action="cascade_options",
                 value='{"coverage": "Medical"}',
@@ -354,19 +353,19 @@ class TreatmentPlanCompletionTests(unittest.TestCase):
 
         with (
             patch(
-                "chatbot.retrieval.exact_match.build_cascade_state",
+                "chatbot.conversation.actions.build_cascade_state",
                 return_value=cascade,
             ),
             patch(
-                "chatbot.retrieval.exact_match.distinct_values",
+                "chatbot.conversation.actions.distinct_values",
                 return_value=["1L", "2L"],
             ),
             patch(
-                "chatbot.retrieval.exact_match._maybe_lives_coverage_then_complete",
+                "chatbot.conversation.actions._maybe_lives_coverage_then_complete",
                 return_value={"status": "complete"},
             ) as complete,
         ):
-            response = exact_match_turn(
+            response = handle_conversation_turn(
                 session_id="test",
                 action="submit_cascade",
                 value={

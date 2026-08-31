@@ -7,10 +7,10 @@ from typing import Optional, Union
 
 load_dotenv()
 
-from chatbot.retrieval.exact_match import exact_match_turn
-from chatbot.synthesis import synthesize_answer
+from chatbot.answer_retrieval import handle_conversation_turn
+from chatbot.synthesis.synthesis import synthesize_answer
 from infrastructure.db import get_db
-from chatbot.feedback import save_feedback
+from chatbot.synthesis.feedback import save_feedback
 
 app = FastAPI(title="Pulse AI Chatbot", version="0.1.0")
 
@@ -114,13 +114,13 @@ def ask(req: AskRequest):
             )
 
         if req.session_id and req.action:
-            turn = exact_match_turn(
+            turn = handle_conversation_turn(
                 session_id=req.session_id,
                 action=req.action,
                 value=req.value,
             )
         elif req.question.strip():
-            turn = exact_match_turn(question=req.question.strip())
+            turn = handle_conversation_turn(question=req.question.strip())
         else:
             raise HTTPException(
                 status_code=400,

@@ -20,7 +20,7 @@ class PermissionsTests(unittest.TestCase):
     def test_load_match_pipeline_accepts_ordered_match_stages(self) -> None:
         stages = [{"$match": {"book": "Medicare"}}, {"$match": {"slug": "aetna"}}]
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "chatbot.permissions.json"
+            path = Path(directory) / "permissions.json"
             path.write_text(json.dumps(stages))
             loaded = permissions._load_match_pipeline(path)
 
@@ -30,7 +30,7 @@ class PermissionsTests(unittest.TestCase):
         invalid_pipelines = ([], {"$match": {}}, [{"$project": {"slug": 1}}])
         for pipeline in invalid_pipelines:
             with self.subTest(pipeline=pipeline), tempfile.TemporaryDirectory() as directory:
-                path = Path(directory) / "chatbot.permissions.json"
+                path = Path(directory) / "permissions.json"
                 path.write_text(json.dumps(pipeline))
                 with self.assertRaises(RuntimeError):
                     permissions._load_match_pipeline(path)

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from chatbot.retrieval.extract_utils import invoke_json_extract
-from chatbot.retrieval.lives_extract import coerce_lives_territory_slot
+from chatbot.slot_extract.utils import invoke_json_extract
+from chatbot.slot_extract.lives_extract import coerce_lives_territory_slot
 
 JOINT_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this joint payer question.
 The user wants TWO separate facts for ONE payer: drug access AND that payer's

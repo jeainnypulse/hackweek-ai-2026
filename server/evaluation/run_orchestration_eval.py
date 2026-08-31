@@ -3,14 +3,14 @@
 Run orchestration / lives eval from the terminal (no UI).
 
 Usage (from server/):
-  python scripts/generate_decision_path_eval.py
-  python scripts/run_orchestration_eval.py
-  python scripts/run_orchestration_eval.py --classify-only
-  python scripts/run_orchestration_eval.py --limit 10
-  python scripts/run_orchestration_eval.py --lives
-  python scripts/run_orchestration_eval.py --lives --csv /path/to/eval.csv
-  python scripts/run_orchestration_eval.py --joint
-  python scripts/run_orchestration_eval.py --joint --csv /path/to/eval.csv
+  python evaluation/generate_decision_path_eval.py
+  python evaluation/run_orchestration_eval.py
+  python evaluation/run_orchestration_eval.py --classify-only
+  python evaluation/run_orchestration_eval.py --limit 10
+  python evaluation/run_orchestration_eval.py --lives
+  python evaluation/run_orchestration_eval.py --lives --csv /path/to/eval.csv
+  python evaluation/run_orchestration_eval.py --joint
+  python evaluation/run_orchestration_eval.py --joint --csv /path/to/eval.csv
 
 Results go to hackweek-ai-2026-test-results/results/<input_stem>_results.csv.
 If that file exists, the name increments: _results_1, _results_2, ...

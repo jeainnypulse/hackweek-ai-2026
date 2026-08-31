@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 import main
-from chatbot import synthesis
+from chatbot.synthesis import synthesis
 
 
 class CanonicalSynthesisTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class CanonicalSynthesisTests(unittest.TestCase):
             "territoryName": "CA",
         }
 
-        with patch("chatbot.synthesis.invoke_claude", return_value="Canonical answer.") as invoke:
+        with patch("chatbot.synthesis.synthesis.invoke_claude", return_value="Canonical answer.") as invoke:
             synthesis.synthesize_answer(
                 "Is Keytrudax covered in Califorxnia?",
                 records,
@@ -127,7 +127,7 @@ Done."""
 
 class SynthesizeAnswerTests(unittest.TestCase):
     def test_empty_access_records_return_guidance_without_bedrock(self):
-        with patch("chatbot.synthesis.invoke_claude") as invoke:
+        with patch("chatbot.synthesis.synthesis.invoke_claude") as invoke:
             answer, citations = synthesis.synthesize_answer(
                 "Tregzi access?",
                 [],
@@ -138,7 +138,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
         invoke.assert_not_called()
 
     def test_empty_lives_and_joint_records_have_specific_guidance(self):
-        with patch("chatbot.synthesis.invoke_claude") as invoke:
+        with patch("chatbot.synthesis.synthesis.invoke_claude") as invoke:
             lives_answer, lives_citations = synthesis.synthesize_answer(
                 "Aetna enrollment?",
                 [],
@@ -165,7 +165,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
             "lives": 5685473,
         }
         with patch(
-            "chatbot.synthesis.invoke_claude",
+            "chatbot.synthesis.synthesis.invoke_claude",
             return_value="**Aetna** has 5,685,473 lives.",
         ) as invoke:
             answer, citations = synthesis.synthesize_answer(
@@ -197,7 +197,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
             "accessData": {"access": "Restricted"},
         }
         with patch(
-            "chatbot.synthesis.invoke_claude",
+            "chatbot.synthesis.synthesis.invoke_claude",
             return_value="# Tregzi is restricted.",
         ) as invoke:
             answer, citations = synthesis.synthesize_answer(
@@ -237,7 +237,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
             "lives": 1000,
         }
         with patch(
-            "chatbot.synthesis.invoke_claude",
+            "chatbot.synthesis.synthesis.invoke_claude",
             return_value="Access sentence. Lives sentence.",
         ) as invoke:
             answer, citations = synthesis.synthesize_answer(

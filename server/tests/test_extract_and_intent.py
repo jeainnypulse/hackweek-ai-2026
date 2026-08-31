@@ -4,37 +4,36 @@ import json
 import unittest
 from unittest.mock import call, patch
 
-from chatbot.retrieval import extract_utils, intent
+from chatbot import intent_classifier as intent
+from chatbot.slot_extract import utils
 
 
 class ExtractUtilsTests(unittest.TestCase):
     def test_parse_llm_json_accepts_plain_and_fenced_json(self) -> None:
         expected = {"organization": "Aetna"}
-        self.assertEqual(extract_utils.parse_llm_json(json.dumps(expected)), expected)
+        self.assertEqual(utils.parse_llm_json(json.dumps(expected)), expected)
         self.assertEqual(
-            extract_utils.parse_llm_json(
-                '```json\n{"organization": "Aetna"}\n```'
-            ),
+            utils.parse_llm_json('```json\n{"organization": "Aetna"}\n```'),
             expected,
         )
 
     def test_parse_llm_json_extracts_object_from_surrounding_text(self) -> None:
         self.assertEqual(
-            extract_utils.parse_llm_json('Result: {"book": "Medicare"} done'),
+            utils.parse_llm_json('Result: {"book": "Medicare"} done'),
             {"book": "Medicare"},
         )
 
     def test_parse_llm_json_propagates_invalid_json(self) -> None:
         for raw in ("not json", "prefix {bad} suffix"):
             with self.subTest(raw=raw), self.assertRaises(json.JSONDecodeError):
-                extract_utils.parse_llm_json(raw)
+                utils.parse_llm_json(raw)
 
     def test_invoke_json_extract_builds_prompt_and_returns_object(self) -> None:
         with patch(
-            "chatbot.retrieval.extract_utils.invoke_claude",
+            "chatbot.slot_extract.utils.invoke_claude",
             return_value='{"coverage": "Pharmacy"}',
         ) as invoke:
-            result = extract_utils.invoke_json_extract(
+            result = utils.invoke_json_extract(
                 "Extract: ",
                 "Aetna lives",
                 max_tokens=77,
@@ -45,18 +44,18 @@ class ExtractUtilsTests(unittest.TestCase):
 
     def test_invoke_json_extract_rejects_non_object_json(self) -> None:
         with patch(
-            "chatbot.retrieval.extract_utils.invoke_claude",
+            "chatbot.slot_extract.utils.invoke_claude",
             return_value='["Aetna"]',
         ):
             with self.assertRaisesRegex(ValueError, "JSON object"):
-                extract_utils.invoke_json_extract("prompt", "question")
+                utils.invoke_json_extract("prompt", "question")
 
     def test_slot_text_normalizes_missing_and_present_values(self) -> None:
         for value in (None, "", " ", "null", " NULL "):
             with self.subTest(value=value):
-                self.assertIsNone(extract_utils.slot_text(value))
-        self.assertEqual(extract_utils.slot_text("  Aetna  "), "Aetna")
-        self.assertEqual(extract_utils.slot_text(42), "42")
+                self.assertIsNone(utils.slot_text(value))
+        self.assertEqual(utils.slot_text("  Aetna  "), "Aetna")
+        self.assertEqual(utils.slot_text(42), "42")
 
 
 class IntentTests(unittest.TestCase):
@@ -101,7 +100,7 @@ class IntentTests(unittest.TestCase):
 
     def test_classify_intent_returns_first_valid_response(self) -> None:
         with patch(
-            "chatbot.retrieval.intent.invoke_claude",
+            "chatbot.intent_classifier.invoke_claude",
             return_value='{"intent": "lives"}',
         ) as invoke:
             self.assertEqual(intent.classify_intent("Aetna enrollment?"), "lives")
@@ -113,7 +112,7 @@ class IntentTests(unittest.TestCase):
 
     def test_classify_intent_retries_one_parse_failure(self) -> None:
         with patch(
-            "chatbot.retrieval.intent.invoke_claude",
+            "chatbot.intent_classifier.invoke_claude",
             side_effect=["invalid", '{"intent": "joint"}'],
         ) as invoke:
             self.assertEqual(intent.classify_intent("access and lives"), "joint")
@@ -126,9 +125,11 @@ class IntentTests(unittest.TestCase):
             ],
         )
 
-    def test_classify_intent_returns_out_of_scope_after_two_parse_failures(self) -> None:
+    def test_classify_intent_returns_out_of_scope_after_two_parse_failures(
+        self,
+    ) -> None:
         with patch(
-            "chatbot.retrieval.intent.invoke_claude",
+            "chatbot.intent_classifier.invoke_claude",
             side_effect=['{"intent": "unknown"}', "invalid"],
         ) as invoke:
             self.assertEqual(intent.classify_intent("unclear"), "out_of_scope")
@@ -136,7 +137,7 @@ class IntentTests(unittest.TestCase):
 
     def test_classify_intent_propagates_bedrock_failures_without_retry(self) -> None:
         with patch(
-            "chatbot.retrieval.intent.invoke_claude",
+            "chatbot.intent_classifier.invoke_claude",
             side_effect=RuntimeError("Bedrock unavailable"),
         ) as invoke:
             with self.assertRaisesRegex(RuntimeError, "Bedrock unavailable"):
