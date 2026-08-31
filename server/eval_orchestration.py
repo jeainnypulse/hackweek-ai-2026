@@ -209,7 +209,7 @@ def compare_orchestration_result(item: dict, turn: dict) -> dict:
     actual_slots = turn.get("confirmed_slots") or {}
     slots_match: Optional[bool] = None
     mismatched_fields: list[dict] = []
-    if expected_intent in ("lives", "joint"):
+    if expected_intent in ("access", "lives", "joint"):
         slots_match, mismatched_fields = compare_expected_slots(
             item.get("expected_slots"), actual_slots
         )

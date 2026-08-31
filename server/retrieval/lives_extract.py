@@ -126,7 +126,10 @@ LIVES_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer LIVES
 
 Slots to extract:
 - organization: specific payer name (e.g. "Aetna", "UnitedHealth Group"). Return null if not specified.
-- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid", "Health Exchange"). Return null if not specified.
+- book: book of business (e.g. "Commercial", "Medicare", "Managed Medicaid",
+  "Health Exchange", "FFS Medicaid", "MAC"). "MAC" means Medicare
+  Administrative Contractor and must not be normalized to "Managed Medicaid".
+  Return null if not specified.
 - coverage: "Medical" or "Pharmacy" if mentioned. Return null if not specified.
 - territoryName: preserve the exact state/territory mention from the question
   (e.g. "California", "CA", "Puerto Rico", "Californa"). Return null when no
