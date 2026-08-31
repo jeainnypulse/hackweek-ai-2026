@@ -22,13 +22,13 @@ def _complete_from_session(session: dict) -> dict:
                         source="user_confirm",
                     )
                     print(
-                        f"[exact_match_entity_linker] synonym writeback "
+                        f"[conversation] synonym writeback "
                         f"{item['dimension']}: {item['alias']!r} -> "
                         f"{item['canonical']!r}"
                     )
                 except Exception as exc:
                     print(
-                        f"[exact_match_entity_linker] synonym writeback failed: {exc}"
+                        f"[conversation] synonym writeback failed: {exc}"
                     )
         session["pending_writebacks"] = []
 

@@ -24,7 +24,6 @@ app.add_middleware(
 
 class AskRequest(BaseModel):
     question: str = ""
-    retrieval_method: str = "exact_match_entity_linker"
     skip_log: bool = False
     session_id: Optional[str] = None
     action: Optional[str] = None  # provide | skip | cascade_options | submit_cascade
@@ -55,7 +54,6 @@ def health_bedrock():
 def _finalize_ask(
     question: str,
     records: list,
-    retrieval_method: str,
     skip_log: bool,
     confirmed_slots: Optional[dict] = None,
     intent: Optional[str] = None,
@@ -79,7 +77,6 @@ def _finalize_ask(
             {
                 "_id": result_id,
                 "question": question,
-                "retrieval_method": retrieval_method,
                 "intent": intent,
                 "records_retrieved": len(records),
                 "answer": answer,
@@ -94,7 +91,6 @@ def _finalize_ask(
         "question": question,
         "answer": answer,
         "citations": citations,
-        "retrieval_method": retrieval_method,
         "intent": intent,
         "records_retrieved": len(records),
         "confirmed_slots": confirmed_slots or {},
@@ -105,14 +101,6 @@ def _finalize_ask(
 @app.post("/api/ask")
 def ask(req: AskRequest):
     try:
-        method = req.retrieval_method or "exact_match_entity_linker"
-        # "exact_match" kept as deprecated alias for older clients
-        if method not in ("exact_match_entity_linker", "exact_match"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown retrieval method: {method}",
-            )
-
         if req.session_id and req.action:
             turn = handle_conversation_turn(
                 session_id=req.session_id,
@@ -133,7 +121,6 @@ def ask(req: AskRequest):
                 result = _finalize_ask(
                     turn.get("question") or req.question,
                     [],
-                    method,
                     req.skip_log,
                     confirmed_slots=turn.get("confirmed_slots") or {},
                     intent="out_of_scope",
@@ -144,7 +131,6 @@ def ask(req: AskRequest):
                 result = _finalize_ask(
                     turn.get("question") or req.question,
                     turn.get("records") or [],
-                    method,
                     req.skip_log,
                     confirmed_slots=turn.get("confirmed_slots"),
                     intent=intent,
@@ -169,7 +155,6 @@ def ask(req: AskRequest):
             "link_info": turn.get("link_info") or {},
             "answer": turn.get("message"),
             "citations": [],
-            "retrieval_method": method,
             "intent": turn.get("intent"),
             "records_retrieved": 0,
         }

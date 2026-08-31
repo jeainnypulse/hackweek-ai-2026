@@ -6,10 +6,7 @@ import {
   formatApiError,
   sendFeedback,
 } from '../api/chatApi'
-import {
-  emptyCascadeSelections,
-  RETRIEVAL_METHOD,
-} from '../constants/slots'
+import { emptyCascadeSelections } from '../constants/slots'
 
 export default function useChat() {
   const [question, setQuestion] = useState('')
@@ -50,7 +47,6 @@ export default function useChat() {
       setHistory(previous => [
         {
           question: originalQuestion || data.question,
-          method: data.retrieval_method || RETRIEVAL_METHOD,
           result: data,
         },
         ...previous,

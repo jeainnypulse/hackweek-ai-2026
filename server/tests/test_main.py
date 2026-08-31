@@ -23,7 +23,6 @@ class MainApiTests(unittest.TestCase):
             result = main._finalize_ask(
                 "Is it covered?",
                 [{"organization": "Aetna"}],
-                "exact_match_entity_linker",
                 True,
                 confirmed_slots=confirmed,
                 intent="access",
@@ -44,7 +43,6 @@ class MainApiTests(unittest.TestCase):
                 "question": "Is it covered?",
                 "answer": "Covered.",
                 "citations": [{"source": "policy"}],
-                "retrieval_method": "exact_match_entity_linker",
                 "intent": "access",
                 "records_retrieved": 1,
                 "confirmed_slots": confirmed,
@@ -63,7 +61,6 @@ class MainApiTests(unittest.TestCase):
             result = main._finalize_ask(
                 "Unsupported question",
                 [],
-                "exact_match_entity_linker",
                 False,
                 confirmed_slots={},
                 intent="out_of_scope",
@@ -76,7 +73,6 @@ class MainApiTests(unittest.TestCase):
             {
                 "_id": "result-2",
                 "question": "Unsupported question",
-                "retrieval_method": "exact_match_entity_linker",
                 "intent": "out_of_scope",
                 "records_retrieved": 0,
                 "answer": "I can only answer payer questions.",
@@ -213,19 +209,11 @@ class MainApiTests(unittest.TestCase):
         self.assertEqual(logged["intent"], "out_of_scope")
         self.assertEqual(logged["records_retrieved"], 0)
 
-    def test_unknown_retrieval_method_is_rejected_before_orchestration(self):
-        with patch("main.handle_conversation_turn") as handle_turn:
-            with self.assertRaises(HTTPException) as raised:
-                main.ask(
-                    main.AskRequest(
-                        question="Is it covered?",
-                        retrieval_method="semantic",
-                    )
-                )
-
-        self.assertEqual(raised.exception.status_code, 400)
-        self.assertIn("Unknown retrieval method", raised.exception.detail)
-        handle_turn.assert_not_called()
+    def test_ask_request_has_no_retrieval_method_field(self):
+        self.assertNotIn(
+            "retrieval_method",
+            main.AskRequest.model_json_schema()["properties"],
+        )
 
     def test_empty_request_is_rejected(self):
         with self.assertRaises(HTTPException) as raised:

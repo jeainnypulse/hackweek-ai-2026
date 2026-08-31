@@ -67,7 +67,7 @@ def _refresh_missing_access_identity(session: dict) -> None:
                 }
                 progress = True
                 print(
-                    f"[exact_match_entity_linker] refreshed sole "
+                    f"[conversation] refreshed sole "
                     f"{dimension}={pick!r}"
                 )
             elif len(options) > 1:
@@ -105,7 +105,7 @@ def _auto_confirm_sole_identity(session: dict) -> None:
             info["method"] = "auto_sole"
             session["link_info"][dimension] = info
             print(
-                f"[exact_match_entity_linker] auto-confirmed sole "
+                f"[conversation] auto-confirmed sole "
                 f"{dimension}={pick!r}"
             )
 

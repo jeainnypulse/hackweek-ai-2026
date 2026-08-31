@@ -1,5 +1,3 @@
-export const RETRIEVAL_METHOD = 'exact_match_entity_linker'
-
 export const SLOT_LABELS = {
   regimen: 'Product',
   indication: 'Indication',

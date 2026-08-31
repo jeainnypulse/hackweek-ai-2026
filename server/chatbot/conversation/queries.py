@@ -27,7 +27,7 @@ def _organization_to_slug(organization: str) -> Optional[str]:
         return None
     if len(slugs) > 1:
         print(
-            f"[exact_match_entity_linker] multiple slugs for {organization!r}: {slugs}"
+            f"[conversation] multiple slugs for {organization!r}: {slugs}"
         )
     return slugs[0]
 
@@ -103,7 +103,7 @@ def _distinct_for_session(session: dict, field: str, filt: dict) -> list[str]:
 def _query_lives_records(slots: dict) -> list[dict]:
     query = _lives_mongo_filter(slots)
     if "slug" not in query:
-        print("[exact_match_entity_linker] lives query skipped: no slug")
+        print("[conversation] lives query skipped: no slug")
         return []
     records = list(
         get_db().payerLatestLives.find(scoped_lives_query(query), {"_id": 0}).limit(50)
@@ -112,7 +112,7 @@ def _query_lives_records(slots: dict) -> list[dict]:
     if organization:
         for record in records:
             record.setdefault("organization", organization)
-    print(f"[exact_match_entity_linker] {len(records)} lives records for {query}")
+    print(f"[conversation] {len(records)} lives records for {query}")
     return records
 
 
@@ -136,7 +136,7 @@ def _query_access_records(slots: dict) -> list[dict]:
     records = list(
         get_db().payerLatestAccess.find(scoped_query(query), {"_id": 0}).limit(50)
     )
-    print(f"[exact_match_entity_linker] {len(records)} access records for {query}")
+    print(f"[conversation] {len(records)} access records for {query}")
     return records
 
 
@@ -144,7 +144,7 @@ def _query_joint_records(slots: dict) -> list[dict]:
     access = [{**row, "collection": "access"} for row in _query_access_records(slots)]
     lives = [{**row, "collection": "lives"} for row in _query_lives_records(slots)]
     print(
-        f"[exact_match_entity_linker] joint records: "
+        f"[conversation] joint records: "
         f"access={len(access)} lives={len(lives)}"
     )
     return access + lives

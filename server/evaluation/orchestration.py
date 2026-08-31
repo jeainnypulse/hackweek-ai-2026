@@ -66,9 +66,6 @@ def normalize_orchestration_row(row: dict, index: int) -> dict:
         "expected_slots": slots,
         "expected_lives": expected_lives,
         "citation": (row.get("citation") or row.get("eval_notes") or "").strip(),
-        "retrieval_method": (
-            row.get("retrieval_method") or "exact_match_entity_linker"
-        ).strip(),
     }
 
 

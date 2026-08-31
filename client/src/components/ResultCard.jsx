@@ -31,10 +31,11 @@ export default function ResultCard({
               ? 'Additional details'
               : 'Clarify slots'}
         </span>
-        <span className="text-xs text-gray-400">
-          {result.retrieval_method}
-          {isComplete ? ` · ${result.records_retrieved} records` : ''}
-        </span>
+        {isComplete && (
+          <span className="text-xs text-gray-400">
+            {result.records_retrieved} records
+          </span>
+        )}
       </div>
 
       {result.question && (

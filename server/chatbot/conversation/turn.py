@@ -76,7 +76,7 @@ def handle_conversation_turn(
         }
 
     slots = extract_slots(question, intent=intent)
-    print(f"[exact_match_entity_linker] intent={intent} slots: {slots}")
+    print(f"[conversation] intent={intent} slots: {slots}")
     if intent == "lives":
         catalogs = {
             dimension: list(values)
@@ -123,7 +123,7 @@ def handle_conversation_turn(
             )
     if link_info:
         print(
-            f"[exact_match_entity_linker] linked "
+            f"[conversation] linked "
             f"({ENTITY_LINK_METHOD}): {link_info}"
         )
 

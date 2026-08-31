@@ -14,7 +14,6 @@ export default function HistoryList({ history, onSelect }) {
             className="text-left bg-white border border-gray-200 rounded-lg px-3 py-2.5 hover:border-violet-200 transition-colors"
           >
             <p className="text-sm text-gray-700 truncate">{item.question}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{item.method}</p>
           </button>
         ))}
       </div>

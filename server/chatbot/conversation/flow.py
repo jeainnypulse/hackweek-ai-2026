@@ -42,7 +42,7 @@ def _linker_clarify_response(session: dict) -> dict:
             info["method"] = "auto_sole"
             session["link_info"]["organization"] = info
             print(
-                f"[exact_match_entity_linker] auto-confirmed sole "
+                f"[conversation] auto-confirmed sole "
                 f"organization={pick!r}"
             )
             return _after_identity_resolved(session)
@@ -91,7 +91,7 @@ def _linker_clarify_response(session: dict) -> dict:
         info["method"] = "auto_sole"
         session["link_info"][dimension] = info
         print(
-            f"[exact_match_entity_linker] auto-confirmed sole "
+            f"[conversation] auto-confirmed sole "
             f"{dimension}={pick!r}"
         )
         return _linker_clarify_response(session)

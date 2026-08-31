@@ -48,7 +48,6 @@ class CanonicalSynthesisTests(unittest.TestCase):
             main._finalize_ask(
                 "Original misspelled question",
                 [{"collection": "access"}],
-                "exact_match_entity_linker",
                 True,
                 confirmed_slots=confirmed,
                 intent="joint",
