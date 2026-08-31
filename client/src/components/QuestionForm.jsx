@@ -16,7 +16,7 @@ export default function QuestionForm({
     <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
       <textarea
         rows={3}
-        placeholder="Ask a payer question — e.g. What is Calquence's QoA for 1L CLL under commercial plans?"
+        placeholder="Ask a payer question — e.g. What is Tregzi's access at Aetna for hematologic malignancies on Medicare?"
         className="w-full text-sm text-gray-800 placeholder-gray-400 resize-none outline-none disabled:opacity-50"
         value={question}
         onChange={event => onQuestionChange(event.target.value)}
