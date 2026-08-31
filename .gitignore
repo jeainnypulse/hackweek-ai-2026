@@ -16,6 +16,7 @@ server/data/*.log
 
 # Node
 client/node_modules/
+client/dist/
 
 # OS
 .DS_Store
