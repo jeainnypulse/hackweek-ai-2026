@@ -7,10 +7,10 @@ from typing import Optional, Union
 
 load_dotenv()
 
-from retrieval.exact_match import exact_match_turn
-from synthesis import synthesize_answer
-from db import get_db
-from feedback import save_feedback
+from chatbot.retrieval.exact_match import exact_match_turn
+from chatbot.synthesis import synthesize_answer
+from infrastructure.db import get_db
+from chatbot.feedback import save_feedback
 
 app = FastAPI(title="Pulse AI Chatbot", version="0.1.0")
 
@@ -43,7 +43,7 @@ def health():
 
 @app.get("/api/health/bedrock")
 def health_bedrock():
-    from bedrock import invoke_claude
+    from infrastructure.bedrock import invoke_claude
 
     try:
         invoke_claude("Reply with OK only.", max_tokens=10)
