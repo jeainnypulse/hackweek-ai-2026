@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from chatbot.slot_extract.utils import invoke_json_extract
-from chatbot.slot_extract.lives_extract import coerce_lives_territory_slot
+from chatbot.slot_extract.lives_extract import (
+    preprocess_lives_territory_slot_before_entity_linker,
+)
 
 JOINT_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this joint payer question.
 The user wants TWO separate facts for ONE payer: drug access AND that payer's
@@ -44,5 +46,5 @@ Question: """
 
 def extract_joint_slots(question: str) -> dict:
     slots = invoke_json_extract(JOINT_SLOT_EXTRACTION_PROMPT, question)
-    coerce_lives_territory_slot(question, slots)
+    preprocess_lives_territory_slot_before_entity_linker(question, slots)
     return slots

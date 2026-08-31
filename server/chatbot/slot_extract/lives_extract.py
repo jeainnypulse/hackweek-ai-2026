@@ -209,7 +209,9 @@ def state_code_from_in_clause(question: str) -> Optional[str]:
     return None
 
 
-def coerce_lives_territory_slot(question: str, slots: dict) -> None:
+def preprocess_lives_territory_slot_before_entity_linker(
+    question: str, slots: dict
+) -> None:
     """Prepare raw LLM geography for entity linking.
 
     Explicit national wording produces the missing-state national path. Cities
@@ -279,5 +281,5 @@ def apply_lives_defaults(
 
 def extract_lives_slots(question: str) -> dict:
     slots = invoke_json_extract(LIVES_SLOT_EXTRACTION_PROMPT, question)
-    coerce_lives_territory_slot(question, slots)
+    preprocess_lives_territory_slot_before_entity_linker(question, slots)
     return slots

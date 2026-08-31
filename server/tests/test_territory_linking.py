@@ -14,7 +14,7 @@ from chatbot.slot_extract.lives_extract import (
     LIVES_DEFAULT_SOURCE,
     US_STATE_CODES,
     apply_lives_defaults,
-    coerce_lives_territory_slot,
+    preprocess_lives_territory_slot_before_entity_linker,
     extract_lives_slots,
     is_national_territory,
     normalize_territory,
@@ -29,9 +29,7 @@ class TerritoryLinkingTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.synonyms = load_synonyms_from_json()
         cls.catalogs = {
-            TERRITORY_LINK_DIMENSION: sorted(
-                {*US_STATE_CODES, "United States"}
-            )
+            TERRITORY_LINK_DIMENSION: sorted({*US_STATE_CODES, "United States"})
         }
 
     def resolve(self, mention: str) -> dict:
@@ -68,7 +66,9 @@ class TerritoryLinkingTests(unittest.TestCase):
 
     def test_missing_geography_remains_national(self) -> None:
         slots = {"territoryName": None, "territoryInvalid": None}
-        coerce_lives_territory_slot("How many lives does Aetna have?", slots)
+        preprocess_lives_territory_slot_before_entity_linker(
+            "How many lives does Aetna have?", slots
+        )
         linked = {}
         apply_lives_defaults(slots, linked)
         self.assertEqual(linked["territoryType"], "National")
@@ -76,12 +76,14 @@ class TerritoryLinkingTests(unittest.TestCase):
 
     def test_raw_state_is_preserved_for_linking(self) -> None:
         slots = {"territoryName": "California", "territoryInvalid": None}
-        coerce_lives_territory_slot("Aetna California enrollment", slots)
+        preprocess_lives_territory_slot_before_entity_linker(
+            "Aetna California enrollment", slots
+        )
         self.assertEqual(slots["territoryName"], "California")
 
     def test_payer_name_state_does_not_override_national(self) -> None:
         slots = {"territoryName": "New Jersey", "territoryInvalid": None}
-        coerce_lives_territory_slot(
+        preprocess_lives_territory_slot_before_entity_linker(
             "Horizon BlueCross BlueShield New Jersey nationally",
             slots,
         )
@@ -90,7 +92,9 @@ class TerritoryLinkingTests(unittest.TestCase):
 
     def test_city_routes_to_manual_clarification(self) -> None:
         slots = {"territoryName": None, "territoryInvalid": "Los Angeles"}
-        coerce_lives_territory_slot("Aetna lives in Los Angeles", slots)
+        preprocess_lives_territory_slot_before_entity_linker(
+            "Aetna lives in Los Angeles", slots
+        )
         session = {
             "session_id": "test",
             "question": "Aetna lives in Los Angeles",
@@ -160,19 +164,13 @@ class TerritoryLinkingTests(unittest.TestCase):
             state_code_from_in_clause("Aetna commercial lives in tx"),
             "TX",
         )
-        self.assertIsNone(
-            state_code_from_in_clause("California payer enrollment")
-        )
-        self.assertIsNone(
-            state_code_from_in_clause("Aetna enrollment in Los Angeles")
-        )
-        self.assertIsNone(
-            state_code_from_in_clause("Aetna enrollment in the Midwest")
-        )
+        self.assertIsNone(state_code_from_in_clause("California payer enrollment"))
+        self.assertIsNone(state_code_from_in_clause("Aetna enrollment in Los Angeles"))
+        self.assertIsNone(state_code_from_in_clause("Aetna enrollment in the Midwest"))
 
     def test_coerce_explicit_national_overrides_extracted_state(self) -> None:
         slots = {"territoryName": "New Jersey", "territoryInvalid": "Midwest"}
-        coerce_lives_territory_slot(
+        preprocess_lives_territory_slot_before_entity_linker(
             "Horizon New Jersey enrollment nationwide",
             slots,
         )
@@ -186,7 +184,7 @@ class TerritoryLinkingTests(unittest.TestCase):
 
     def test_coerce_region_preserves_invalid_value_for_clarification(self) -> None:
         slots = {"territoryName": None, "territoryInvalid": None}
-        coerce_lives_territory_slot(
+        preprocess_lives_territory_slot_before_entity_linker(
             "Aetna commercial lives in the Midwest",
             slots,
         )
@@ -195,7 +193,7 @@ class TerritoryLinkingTests(unittest.TestCase):
 
     def test_coerce_uses_state_in_clause_as_fallback(self) -> None:
         slots = {"territoryName": None, "territoryInvalid": None}
-        coerce_lives_territory_slot(
+        preprocess_lives_territory_slot_before_entity_linker(
             "Aetna commercial lives in California",
             slots,
         )
