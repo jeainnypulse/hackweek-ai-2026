@@ -68,7 +68,6 @@ def _prepare_lives_fields(slots: dict, linked: dict, link_info: dict) -> None:
             }
         linked.pop(TERRITORY_LINK_DIMENSION, None)
         linked.pop("territoryType", None)
-        linked.pop("territory", None)
         linked.pop("territoryInvalid", None)
 
 
@@ -93,7 +92,7 @@ def handle_conversation_turn(
             "intent": None,
         }
 
-    intent = classify_intent(question)
+    intent = classify_intent(question)  # LLM
     if intent == "out_of_scope":
         return {
             "status": "complete",
@@ -108,7 +107,7 @@ def handle_conversation_turn(
             "intent": "out_of_scope",
         }
 
-    slots = extract_slots(question, intent=intent)
+    slots = extract_slots(question, intent=intent)  # LLM
     print(f"[conversation] intent={intent} slots: {slots}")
     if intent == "lives":
         catalogs = {
@@ -144,10 +143,7 @@ def handle_conversation_turn(
         if intent == "joint":
             _prepare_lives_fields(slots, linked, link_info)
     if link_info:
-        print(
-            f"[conversation] linked "
-            f"({ENTITY_LINK_METHOD}): {link_info}"
-        )
+        print(f"[conversation] linked " f"({ENTITY_LINK_METHOD}): {link_info}")
 
     session_id = str(uuid.uuid4())
     session = {

@@ -148,9 +148,6 @@ def _record_lives(records: list) -> Optional[int]:
     return None
 
 
-_SLOT_KEY_ALIASES = {"territory": "territoryName"}
-
-
 def _slot_value(value: Any) -> Optional[str]:
     if value is None or value == "" or str(value).strip().lower() == "null":
         return None
@@ -169,14 +166,9 @@ def compare_expected_slots(
         exp = _slot_value(raw)
         if exp is None:
             continue
-        actual_key = _SLOT_KEY_ALIASES.get(key, key)
-        act = _slot_value(actual.get(actual_key))
-        if act is None and actual_key != key:
-            act = _slot_value(actual.get(key))
+        act = _slot_value(actual.get(key))
         if act is None or act.casefold() != exp.casefold():
-            mismatches.append(
-                {"field": actual_key, "expected": exp, "actual": act}
-            )
+            mismatches.append({"field": key, "expected": exp, "actual": act})
     return (len(mismatches) == 0), mismatches
 
 

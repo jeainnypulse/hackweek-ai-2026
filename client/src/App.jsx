@@ -1,5 +1,5 @@
 import AppHeader from './components/AppHeader'
-import HistoryList from './components/HistoryList'
+import ChatHistory from './components/ChatHistory'
 import QuestionForm from './components/QuestionForm'
 import ResultCard from './components/ResultCard'
 import useChat from './hooks/useChat'
@@ -36,7 +36,7 @@ export default function App() {
           onStartOver={chat.startOver}
         />
 
-        <HistoryList
+        <ChatHistory
           history={chat.history}
           onSelect={chat.showHistoryItem}
         />

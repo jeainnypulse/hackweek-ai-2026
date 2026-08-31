@@ -1,4 +1,4 @@
-export default function HistoryList({ history, onSelect }) {
+export default function ChatHistory({ history, onSelect }) {
   if (!history.length) return null
 
   return (

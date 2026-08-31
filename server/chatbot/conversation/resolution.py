@@ -69,7 +69,6 @@ def _record_confirmation(
     if field == "territoryName":
         slots = session["slots"]
         slots["territoryName"] = value
-        slots["territory"] = value
         slots["territoryInvalid"] = None
         apply_lives_defaults(
             slots,

@@ -81,7 +81,6 @@ def _distinct_for_session(session: dict, field: str, filt: dict) -> list[str]:
             for key, value in filt.items()
             if key
             not in {
-                "territory",
                 "territoryType",
                 "territoryName",
                 "source",
@@ -140,7 +139,6 @@ def _query_access_records(slots: dict) -> list[dict]:
         and value != ""
         and key
         not in (
-            "territory",
             "territoryType",
             "territoryName",
             "source",

@@ -171,11 +171,7 @@ def _has_phrase(key: str, phrases: tuple[str, ...]) -> bool:
 
 
 def territory_raw_from_slots(slots: dict) -> Optional[str]:
-    for key in ("territoryName", "territory"):
-        value = slot_text(slots.get(key))
-        if value:
-            return value
-    return None
+    return slot_text(slots.get("territoryName"))
 
 
 def normalized_state_code(raw: Optional[str]) -> Optional[str]:
@@ -240,11 +236,9 @@ def coerce_lives_territory_slot(question: str, slots: dict) -> None:
 
     if mention:
         slots["territoryName"] = mention
-        slots["territory"] = mention
         slots["territoryInvalid"] = None
     else:
         slots["territoryName"] = None
-        slots["territory"] = None
         slots["territoryInvalid"] = invalid
 
 
@@ -276,7 +270,6 @@ def apply_lives_defaults(
         )
     linked["territoryType"] = resolved_type
     linked["territoryName"] = territory_name
-    linked.pop("territory", None)
     linked.pop("territoryInvalid", None)
     linked["source"] = LIVES_DEFAULT_SOURCE
     coverage = slots.get("coverage")

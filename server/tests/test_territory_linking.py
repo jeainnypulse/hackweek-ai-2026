@@ -120,19 +120,12 @@ class TerritoryLinkingTests(unittest.TestCase):
         self.assertEqual(response["current_slot"], "territoryName")
         self.assertEqual(response["candidates"], ["PR", "United States"])
 
-    def test_territory_raw_prefers_territory_name_and_ignores_null(self) -> None:
+    def test_territory_raw_reads_territory_name_and_ignores_null(self) -> None:
         self.assertEqual(
-            territory_raw_from_slots(
-                {"territoryName": " California ", "territory": "TX"}
-            ),
+            territory_raw_from_slots({"territoryName": " California "}),
             "California",
         )
-        self.assertEqual(
-            territory_raw_from_slots(
-                {"territoryName": "null", "territory": "TX"}
-            ),
-            "TX",
-        )
+        self.assertIsNone(territory_raw_from_slots({"territoryName": "null"}))
         self.assertIsNone(territory_raw_from_slots({}))
 
     def test_normalized_state_code_supports_names_codes_and_territories(self) -> None:
@@ -187,7 +180,6 @@ class TerritoryLinkingTests(unittest.TestCase):
             slots,
             {
                 "territoryName": None,
-                "territory": None,
                 "territoryInvalid": None,
             },
         )
@@ -208,7 +200,6 @@ class TerritoryLinkingTests(unittest.TestCase):
             slots,
         )
         self.assertEqual(slots["territoryName"], "CA")
-        self.assertEqual(slots["territory"], "CA")
         self.assertIsNone(slots["territoryInvalid"])
 
     def test_normalize_territory_defaults_unknown_values_to_national(self) -> None:
@@ -234,7 +225,6 @@ class TerritoryLinkingTests(unittest.TestCase):
         }
         linked = {
             "territoryName": "CA",
-            "territory": "California",
             "territoryInvalid": "old",
         }
         apply_lives_defaults(slots, linked, territory_type="U.S. State")
