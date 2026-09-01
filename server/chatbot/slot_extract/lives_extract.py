@@ -114,12 +114,17 @@ _REGION_PHRASES = (
     "new england",
 )
 _NATIONAL_PHRASES = (
+    "national",
     "nationally",
     "nationwide",
     "across the us",
     "across the u.s.",
+    "across the united states",
+    "across united states",
     "in the united states",
     "in the usa",
+    "total us",
+    "total u.s.",
 )
 
 LIVES_SLOT_EXTRACTION_PROMPT = """Extract structured slots from this payer LIVES / enrollment question. Return ONLY valid JSON with no explanation or markdown.
@@ -168,6 +173,17 @@ def _question_key(question: str) -> str:
 
 def _has_phrase(key: str, phrases: tuple[str, ...]) -> bool:
     return any(p in key for p in phrases)
+
+
+def _explicit_invalid_geography(key: str) -> Optional[str]:
+    for phrase in (*_CITY_PHRASES, *_REGION_PHRASES):
+        escaped = re.escape(phrase)
+        if re.search(
+            rf"\b(?:in|across|throughout|around)\s+(?:the\s+)?{escaped}\b",
+            key,
+        ):
+            return phrase
+    return None
 
 
 def territory_raw_from_slots(slots: dict) -> Optional[str]:
@@ -221,10 +237,14 @@ def preprocess_lives_territory_slot_before_entity_linker(
     key = _question_key(question)
     raw = territory_raw_from_slots(slots)
     extracted_invalid = slot_text(slots.get("territoryInvalid"))
-    explicit_invalid = next(
-        (phrase for phrase in (*_CITY_PHRASES, *_REGION_PHRASES) if phrase in key),
-        None,
-    )
+    explicit_invalid = _explicit_invalid_geography(key)
+    organization = _question_key(slot_text(slots.get("organization")) or "")
+    if (
+        extracted_invalid
+        and _question_key(extracted_invalid) in organization
+        and not explicit_invalid
+    ):
+        extracted_invalid = None
 
     if _has_phrase(key, _NATIONAL_PHRASES) or is_national_territory(raw):
         mention = None

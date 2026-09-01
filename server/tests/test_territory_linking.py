@@ -74,6 +74,32 @@ class TerritoryLinkingTests(unittest.TestCase):
         self.assertEqual(linked["territoryType"], "National")
         self.assertEqual(linked["territoryName"], "United States")
 
+    def test_city_inside_payer_name_is_not_a_geography(self) -> None:
+        slots = {
+            "organization": "Boston Medical Center",
+            "territoryName": None,
+            "territoryInvalid": "Boston",
+        }
+        preprocess_lives_territory_slot_before_entity_linker(
+            "How many lives does Boston Medical Center have?",
+            slots,
+        )
+        self.assertIsNone(slots["territoryName"])
+        self.assertIsNone(slots["territoryInvalid"])
+
+    def test_city_in_explicit_geography_is_preserved_for_clarification(self) -> None:
+        slots = {
+            "organization": "Boston Medical Center",
+            "territoryName": None,
+            "territoryInvalid": "Boston",
+        }
+        preprocess_lives_territory_slot_before_entity_linker(
+            "How many lives does Boston Medical Center have in Boston?",
+            slots,
+        )
+        self.assertIsNone(slots["territoryName"])
+        self.assertEqual(slots["territoryInvalid"], "Boston")
+
     def test_raw_state_is_preserved_for_linking(self) -> None:
         slots = {"territoryName": "California", "territoryInvalid": None}
         preprocess_lives_territory_slot_before_entity_linker(

@@ -64,6 +64,196 @@ def _slots(**values: Any) -> str:
     )
 
 
+def _question_variants(row: dict) -> list[str]:
+    """Return ten deterministic phrasings for each decision-path archetype."""
+    key = (row["type"], row["sub_type"])
+    slots = json.loads(row["expected_slots"]) if row["expected_slots"] else {}
+    organization = slots.get("organization", "")
+    regimen = slots.get("regimen", "")
+    indication = slots.get("indication", "")
+    book = slots.get("book", "")
+    coverage = slots.get("coverage", "")
+    population = slots.get("population", "")
+    line = slots.get("line", "")
+
+    variants = {
+        ("access_lookup", "data_complete"): [
+            row["question"],
+            f"Give me the QoA for {regimen} in {indication}, {population}, {line}, "
+            f"at {organization} under {book} {coverage}.",
+            f"Is {regimen} restricted for {indication} ({population}, {line}) on "
+            f"{organization}'s {book} {coverage} benefit?",
+            f"Does {organization} require PA for {regimen}, {indication}, "
+            f"{population}, {line}, with {book} {coverage} coverage?",
+            f"Look up the access score: payer={organization}; product={regimen}; "
+            f"indication={indication}; population={population}; line={line}; "
+            f"book={book}; coverage={coverage}.",
+            f"For {organization} / {book} / {coverage}, what access does {regimen} "
+            f"have in {indication} for {population} at {line}?",
+            f"Can patients with {indication}, {population}, at {line} access "
+            f"{regimen} through {organization} {book} {coverage}?",
+            f"{organization.upper()} {book.upper()} {coverage.lower()}: "
+            f"{regimen} access for {indication}, {population}, {line}?",
+            f"What's the access status—not the criteria text—for {regimen} at "
+            f"{organization} on {book} {coverage}, {indication}, {population}, {line}?",
+            f"Check whether {regimen} is unrestricted at {organization}: "
+            f"{indication}; {population}; {line}; {book}; {coverage}.",
+        ],
+        ("access_lookup", "data_auto_complete"): [
+            row["question"],
+            f"What's the QoA for {regimen}, {indication}, at {organization} on {book}?",
+            f"Is {regimen} restricted by {organization} for {indication} under {book}?",
+            f"Does {organization} require PA for {regimen} in {indication} on {book}?",
+            f"Access score for {organization} / {regimen} / {indication} / {book}?",
+            f"Can you check {regimen} access for {indication} with {organization}'s {book} plan?",
+            f"For {book} members at {organization}, how is {regimen} covered for {indication}?",
+            f"{organization.upper()} {book.lower()} — {regimen} QoA in {indication}?",
+            f"Tell me whether {regimen} is unrestricted for {indication} at {organization} ({book}).",
+            f"Simple lookup: {regimen} access, {organization}, {indication}, {book}.",
+        ],
+        ("access_lookup", "data_clarify_book"): [
+            row["question"],
+            f"What's the QoA for {regimen} in {indication} at {organization}?",
+            f"Is {regimen} restricted by {organization} for {indication}?",
+            f"Does {organization} require PA for {regimen} in {indication}?",
+            f"Access score for {organization} / {regimen} / {indication}?",
+            f"Can you look up {regimen} access at {organization} for {indication}?",
+            f"For {indication}, how does {organization} cover {regimen}?",
+            f"{organization.upper()}: {regimen} QoA for {indication}?",
+            f"Tell me the access status for {regimen}, {indication}, at {organization}.",
+            f"Is {regimen} unrestricted for {organization}'s {indication} patients?",
+        ],
+        ("access_lookup", "data_empty"): [
+            row["question"],
+            f"QoA for {regimen} in {indication} at {organization} on {book}?",
+            f"Is {regimen} restricted by {organization} for {indication} under {book}?",
+            f"Does {organization} require PA for {regimen}, {indication}, on {book}?",
+            f"Access score: {organization}; {regimen}; {indication}; {book}.",
+            f"Check {organization}'s {book} access to {regimen} for {indication}.",
+            f"For {book} members with {indication}, how is {regimen} covered by {organization}?",
+            f"{organization.upper()} {book.upper()} — {regimen} access in {indication}?",
+            f"Look up the access status for {regimen} at {organization} ({book}, {indication}).",
+            f"Is {regimen} unrestricted for {indication} on {organization}'s {book} plan?",
+        ],
+        ("lives_lookup", "data_complete"): [
+            row["question"],
+            f"What is {organization}'s national {book} {coverage} enrollment?",
+            f"Give me the covered lives count for {organization}, {book} {coverage}, across the US.",
+            f"What percent of nationwide {book} {coverage} lives does {organization} have?",
+            f"{organization} — total US {book} {coverage} membership?",
+            f"How many people are enrolled nationally with {organization} under {book} {coverage}?",
+            f"National lives lookup: payer={organization}; book={book}; coverage={coverage}.",
+            f"Across the United States, how many {book} {coverage} lives are with {organization}?",
+            f"{organization.upper()} {book.lower()} {coverage.lower()} lives, nationally?",
+            f"I only need enrollment: {organization}, {book}, {coverage}, national.",
+        ],
+        ("lives_lookup", "data_clarify_coverage"): [
+            row["question"],
+            f"What is {organization}'s national {book} enrollment?",
+            f"How many covered lives does {organization} have on {book} across the US?",
+            f"What percent of nationwide {book} lives belongs to {organization}?",
+            f"{organization} — total US {book} membership?",
+            f"How many people are enrolled nationally with {organization} under {book}?",
+            f"National lives lookup: payer={organization}; book={book}.",
+            f"Across the United States, how many {book} lives are with {organization}?",
+            f"{organization.upper()} {book.lower()} lives, nationally?",
+            f"I only need enrollment: {organization}, {book}, national.",
+        ],
+        ("lives_lookup", "data_clarify_book"): [
+            row["question"],
+            f"What is {organization}'s national {coverage} enrollment?",
+            f"How many covered {coverage} lives does {organization} have across the US?",
+            f"What percent of nationwide {coverage} lives belongs to {organization}?",
+            f"{organization} — total US {coverage} membership?",
+            f"How many people have {coverage} coverage nationally with {organization}?",
+            f"National lives lookup: payer={organization}; coverage={coverage}.",
+            f"Across the United States, how many {coverage} lives are with {organization}?",
+            f"{organization.upper()} {coverage.lower()} lives, nationally?",
+            f"I only need enrollment: {organization}, {coverage}, national.",
+        ],
+        ("lives_lookup", "data_refuse_unsupported_geography"): [
+            row["question"],
+            "How many Commercial Medical lives does Aetna have in the Midwest?",
+            "What is UnitedHealth's Medicare enrollment in the Northeast?",
+            "Count Humana's Pharmacy lives on the West Coast.",
+            "How many covered lives does Aetna have in New York City?",
+            "Give me Cigna's Commercial Medical membership in Los Angeles.",
+            "What are Centene's Medicaid lives in Chicago?",
+            "How many payer lives are in the San Francisco Bay Area?",
+            "Show UnitedHealth enrollment across the Pacific Northwest.",
+            "What is Aetna's membership in the tri-state area?",
+        ],
+        ("lives_lookup", "data_empty"): [
+            row["question"],
+            f"What is {organization}'s national {book} {coverage} enrollment?",
+            f"How many covered lives does {organization} have on {book} {coverage} across the US?",
+            f"What percent of nationwide {book} {coverage} lives belongs to {organization}?",
+            f"{organization} — total US {book} {coverage} membership?",
+            f"How many people are enrolled nationally with {organization} under {book} {coverage}?",
+            f"National lives lookup: payer={organization}; book={book}; coverage={coverage}.",
+            f"Across the United States, how many {book} {coverage} lives are with {organization}?",
+            f"{organization.upper()} {book.lower()} {coverage.lower()} lives, nationally?",
+            f"I only need enrollment: {organization}, {book}, {coverage}, national.",
+        ],
+        ("joint_lookup", "data_complete"): [
+            row["question"],
+            f"Give me {regimen} QoA for {indication} at {organization} on {book} "
+            f"{coverage}, plus their national lives.",
+            f"Is {regimen} restricted for {indication} by {organization} under {book} "
+            f"{coverage}, and what is that payer's US enrollment?",
+            f"Does {organization} require PA for {regimen} in {indication} on {book} "
+            f"{coverage}; separately, how many national lives do they have?",
+            f"Two facts for {organization}: {regimen} access in {indication} on {book} "
+            f"{coverage}, and nationwide membership.",
+            f"What is the access score for {regimen}, {indication}, at {organization} "
+            f"({book} {coverage}) and their national covered-lives count?",
+            f"For {organization}'s {book} {coverage} business, tell me {regimen} access "
+            f"for {indication} and total US enrollment.",
+            f"{organization.upper()}: {regimen} QoA, {indication}, {book} {coverage}; "
+            "also national lives?",
+            f"Can patients with {indication} access {regimen} through {organization} "
+            f"{book} {coverage}, and how large is that payer nationally?",
+            f"Look up both {regimen} access for {indication} and national enrollment "
+            f"for {organization} under {book} {coverage}.",
+        ],
+        ("negative_control", "static_refuse"): [
+            row["question"],
+            "What exact prior-authorization criteria does Aetna use for Tregzi?",
+            "Which documents must I submit for a Tregzi prior authorization?",
+            "What formulary tier and copay does Humana assign to Brukinsa?",
+            "How many Aetna lives are covered specifically for Tregzi?",
+            "What percent of Commercial lives have a PA restriction for Tregzi?",
+            "Compare Tregzi access at Aetna versus UnitedHealth.",
+            "Rank the top five payers by unrestricted Brukinsa access.",
+            "What do the NCCN guidelines recommend for CLL?",
+            "Which PBM manages Aetna's pharmacy benefit?",
+        ],
+    }
+    questions = variants.get(key)
+    if questions is None:
+        raise RuntimeError(f"No question variants configured for {key!r}.")
+    if len(questions) != 10 or len(set(questions)) != 10:
+        raise RuntimeError(f"Expected ten unique question variants for {key!r}.")
+    return questions
+
+
+def _expand_rows(rows: list[dict]) -> list[dict]:
+    expanded = []
+    for row in rows:
+        for variant, question in enumerate(_question_variants(row), start=1):
+            expanded.append(
+                {
+                    **row,
+                    "question": question,
+                    "eval_notes": f"{row['eval_notes']} Variant {variant}/10.",
+                }
+            )
+    return [
+        {"id": index, **row}
+        for index, row in enumerate(expanded, start=1)
+    ]
+
+
 def _organization_by_slug(access_records: list[dict]) -> dict[str, str]:
     organizations: dict[str, set[str]] = defaultdict(set)
     for record in access_records:
@@ -448,7 +638,7 @@ def build_rows(access_records: list[dict], lives_records: list[dict]) -> list[di
             "eval_notes": "Static negative control; payer data cannot create OOS text.",
         },
     ]
-    return [{"id": index, **row} for index, row in enumerate(rows, start=1)]
+    return _expand_rows(rows)
 
 
 def load_latest_records() -> tuple[list[dict], list[dict]]:

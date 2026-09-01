@@ -284,6 +284,36 @@ class FacetedProgressionTests(unittest.TestCase):
         self.assertEqual(response["records"], [])
         complete.assert_not_called()
 
+    def test_zero_options_after_confirmed_facets_returns_empty_without_querying(
+        self,
+    ) -> None:
+        session = _session(
+            values={
+                "regimen": "Tregzi",
+                "indication": "CLL",
+                "book": "FFS Medicaid",
+                "organization": "Aetna",
+            }
+        )
+        with (
+            patch(
+                "chatbot.conversation.resolution._distinct_for_session",
+                return_value=[],
+            ),
+            patch(
+                "chatbot.conversation.resolution._complete_from_session"
+            ) as complete,
+        ):
+            response = resolve_next_slot(session)
+
+        self.assertEqual(response["status"], "complete")
+        self.assertEqual(response["records"], [])
+        self.assertEqual(
+            response["confirmed_slots"]["book"],
+            "FFS Medicaid",
+        )
+        complete.assert_not_called()
+
     def test_completion_queries_only_after_all_required_fields_are_confirmed(self) -> None:
         session = _session(values=ACCESS_VALUES)
         options = {field: [value] for field, value in ACCESS_VALUES.items()}

@@ -53,6 +53,8 @@ class DecisionPathEvalTests(unittest.TestCase):
     def test_generator_covers_every_observable_behavior(self):
         rows = build_rows(self.access_records, self.lives_records)
 
+        self.assertGreaterEqual(len(rows), 100)
+        self.assertEqual(len({row["question"] for row in rows}), len(rows))
         self.assertEqual(
             {row["expected_behavior"] for row in rows},
             {"complete", "clarify", "empty", "refuse"},
@@ -69,6 +71,11 @@ class DecisionPathEvalTests(unittest.TestCase):
             "data_refuse_unsupported_geography",
             {row["sub_type"] for row in rows},
         )
+        subtype_counts = {}
+        for row in rows:
+            key = (row["type"], row["sub_type"])
+            subtype_counts[key] = subtype_counts.get(key, 0) + 1
+        self.assertTrue(all(count >= 10 for count in subtype_counts.values()))
 
     def test_access_expected_slots_are_scored(self):
         item = {

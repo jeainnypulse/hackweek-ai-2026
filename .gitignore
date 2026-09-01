@@ -7,9 +7,6 @@ server/**/__pycache__/
 # Environment variables — never commit this
 server/.env
 
-# Fine-tuned model weights / checkpoints (too large for git)
-server/models/
-
 # Generated evaluation output
 server/data/*.csv
 server/data/*.log
@@ -17,6 +14,7 @@ server/data/*.log
 # Node
 client/node_modules/
 client/dist/
+client/.npmrc
 
 # OS
 .DS_Store

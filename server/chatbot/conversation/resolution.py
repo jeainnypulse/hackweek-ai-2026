@@ -140,6 +140,26 @@ def _resolution_error(session: dict, field: str) -> dict:
     )
 
 
+def _empty_result(session: dict) -> dict:
+    """Return an empty completion when confirmed facets prove no tuple exists."""
+    session["current_slot"] = None
+    return _with_intent(
+        session,
+        {
+            "status": "complete",
+            "session_id": session["session_id"],
+            "question": session["question"],
+            "message": None,
+            "current_slot": None,
+            "candidates": [],
+            "confirmed_slots": _confirmed_view(session),
+            "allow_skip": False,
+            "link_info": session["link_info"],
+            "records": [],
+        },
+    )
+
+
 def resolve_next_slot(session: dict) -> dict:
     """Confirm exactly one ordered facet at a time, then complete."""
     for field in required_slots(session.get("intent") or "access"):
@@ -148,6 +168,8 @@ def resolve_next_slot(session: dict) -> dict:
 
         options = _options_for(session, field)
         if not options:
+            if _confirmed_filter(session, exclude=field):
+                return _empty_result(session)
             return _resolution_error(session, field)
 
         candidates = _scoped_candidates(session, field, options)
