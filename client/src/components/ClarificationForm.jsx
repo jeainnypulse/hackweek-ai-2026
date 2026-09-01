@@ -1,3 +1,5 @@
+import { Typography } from '@pulse-analytics/pulse-design-system'
+
 import { SLOT_LABELS } from '../constants/slots'
 import ConfirmedSlots from './ConfirmedSlots'
 
@@ -18,20 +20,31 @@ export default function ClarificationForm({
     <>
       {hasConfirmedSlots && (
         <>
-          <p className="text-sm font-medium text-gray-900 mb-2">
+          <Typography
+            variant="Body100.Medium"
+            className="text-gray-900 mb-2"
+          >
             Here's what I have confirmed
-          </p>
+          </Typography>
           <ConfirmedSlots slots={result.confirmed_slots} asList />
         </>
       )}
 
-      <p className="text-sm text-gray-800 leading-relaxed mb-4 whitespace-pre-wrap">
+      <Typography
+        variant="Body100.Regular"
+        className="text-gray-800 mb-4 whitespace-pre-wrap"
+      >
         {result.message || result.answer}
-      </p>
+      </Typography>
 
       {result.status === 'needs_input' && (
         <div className="pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-400 mb-2">Select {slotLabel}</p>
+          <Typography
+            variant="Body50.Regular"
+            className="text-gray-400 mb-2"
+          >
+            Select {slotLabel}
+          </Typography>
 
           {result.candidates?.length > 0 ? (
             <div className="space-y-3">
@@ -56,7 +69,9 @@ export default function ClarificationForm({
                   disabled={loading || !slotInput.trim()}
                   className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg transition-colors"
                 >
-                  {loading ? 'Looking up…' : 'Confirm'}
+                  <Typography variant="Body50.Medium">
+                    {loading ? 'Looking up…' : 'Confirm'}
+                  </Typography>
                 </button>
               </div>
             </div>
@@ -81,7 +96,9 @@ export default function ClarificationForm({
                 disabled={loading || !slotInput.trim()}
                 className="text-sm bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors"
               >
-                Submit
+                <Typography variant="Body50.Medium">
+                  Submit
+                </Typography>
               </button>
             </div>
           )}
@@ -93,7 +110,9 @@ export default function ClarificationForm({
           onClick={onStartOver}
           className="mt-3 text-xs text-violet-600 hover:underline"
         >
-          Start over
+          <Typography variant="Body50.Medium">
+            Start over
+          </Typography>
         </button>
       )}
     </>

@@ -37,15 +37,17 @@ export default function useChat() {
     }
   }
 
-  async function ask() {
-    if (!question.trim()) return
+  async function ask(questionOverride) {
+    const nextQuestion =
+      typeof questionOverride === 'string' ? questionOverride : question
+    if (!nextQuestion.trim()) return
 
     setLoading(true)
     setError(null)
     setResult(null)
     setSessionId(null)
     setSlotInput('')
-    const asked = question.trim()
+    const asked = nextQuestion.trim()
 
     try {
       const data = await askQuestion(asked)

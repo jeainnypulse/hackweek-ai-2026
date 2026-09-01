@@ -1,3 +1,5 @@
+import { Typography } from '@pulse-analytics/pulse-design-system'
+
 export default function QuestionForm({
   question,
   onQuestionChange,
@@ -13,23 +15,26 @@ export default function QuestionForm({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+    <div className="pulse-composer">
       <textarea
-        rows={3}
-        placeholder="Ask a payer question — e.g. What is Tregzi's access at Aetna for hematologic malignancies on Medicare?"
-        className="w-full text-sm text-gray-800 placeholder-gray-400 resize-none outline-none disabled:opacity-50"
+        rows={4}
+        placeholder="Ask a payer question..."
+        className="pulse-composer-input"
         value={question}
         onChange={event => onQuestionChange(event.target.value)}
         onKeyDown={handleKeyDown}
         disabled={inConversation || loading}
       />
-      <div className="flex items-center justify-end mt-3 pt-3 border-t border-gray-100">
+      <div className="pulse-composer-actions">
         <button
-          onClick={onSubmit}
+          type="button"
+          onClick={() => onSubmit()}
           disabled={loading || !question.trim() || inConversation}
-          className="text-sm bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg transition-colors"
+          className="pulse-submit"
         >
-          {loading && !inConversation ? 'Thinking...' : 'Ask'}
+          <Typography variant="Body25.Semibold">
+            {loading && !inConversation ? 'Thinking...' : 'Submit'}
+          </Typography>
         </button>
       </div>
     </div>

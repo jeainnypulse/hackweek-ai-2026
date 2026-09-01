@@ -1,3 +1,5 @@
+import { Typography } from '@pulse-analytics/pulse-design-system'
+
 import AnswerView from './AnswerView'
 import ClarificationForm from './ClarificationForm'
 
@@ -17,25 +19,37 @@ export default function ResultCard({
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">
+        <Typography
+          variant="Overline50.Medium"
+          className="text-violet-600"
+        >
           {isComplete
             ? 'Answer'
             : 'Clarify slots'}
-        </span>
+        </Typography>
         {isComplete && (
-          <span className="text-xs text-gray-400">
+          <Typography
+            variant="Body50.Regular"
+            className="text-gray-400"
+          >
             {result.records_retrieved} records
-          </span>
+          </Typography>
         )}
       </div>
 
       {result.question && (
-        <p className="text-sm text-gray-500 mb-3 pb-3 border-b border-gray-100">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide mr-2">
+        <Typography
+          variant="Body100.Regular"
+          className="text-gray-500 mb-3 pb-3 border-b border-gray-100"
+        >
+          <Typography
+            variant="Overline50.Medium"
+            className="text-gray-400 mr-2"
+          >
             Question
-          </span>
+          </Typography>
           {result.question}
-        </p>
+        </Typography>
       )}
 
       {isComplete ? (
