@@ -159,31 +159,16 @@ input {
 }
 
 .pulse-welcome-mark {
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 12px;
+  width: 70px;
+  height: 70px;
+  margin-bottom: 8px;
   color: #0668D9;
-}
-
-.pulse-intro {
-  width: 100%;
-  max-width: 270px;
-  color: #667585;
-}
-
-.pulse-intro-copy {
-  margin: 0;
-}
-
-.pulse-try-label {
-  margin: 16px 0 10px;
-  color: #526272;
 }
 
 .pulse-suggestions {
   display: grid;
   width: 100%;
-  gap: 6px;
+  gap: 8px;
 }
 
 .pulse-suggestions button {
@@ -192,7 +177,7 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 12px;
   border: 0;
   border-radius: 6px;
   font-size: 12px;
@@ -226,16 +211,12 @@ input {
   background: #fff;
 }
 
-.pulse-drawer-footer > p {
-  margin: 0 0 10px;
-  color: #667585;
-  font-size: 11px;
-  text-align: center;
-}
+ 
 
-.pulse-support-copy {
+.pulse-drawer-footer > .pulse-support-copy {
   display: block;
-  margin-top: 28px;
+  margin: 0;
+  padding: 6px 0;
   color: #68798a;
   font-size: 9px;
   text-align: center;
@@ -255,7 +236,8 @@ input {
 .pulse-composer-input {
   display: block;
   width: 100%;
-  min-height: 92px;
+  height: 100px;
+  min-height: 100px;
   padding: 12px;
   resize: none;
   border: 0;
@@ -273,10 +255,10 @@ input {
   opacity: 0.55;
 }
 
-.pulse-composer-actions {
+.pulse-footer-actions {
   display: flex;
   justify-content: flex-end;
-  padding: 8px;
+  margin: 18px -32px 0;
 }
 
 .pulse-submit {
@@ -285,13 +267,12 @@ input {
   border: 0;
   border-radius: 3px;
   color: #fff;
-  background: #168bd4;
   font-size: 11px;
   cursor: pointer;
 }
 
 .pulse-submit:hover {
-  background: #0877bd;
+  filter: brightness(0.92);
 }
 
 .pulse-submit:disabled {
@@ -319,7 +300,7 @@ input {
   }
 
   .pulse-drawer {
-    width: min(380px, 92vw);
+    width: min(500px, 92vw);
   }
 
   .pulse-drawer-content {
@@ -330,5 +311,10 @@ input {
   .pulse-drawer-footer {
     padding-right: 24px;
     padding-left: 24px;
+  }
+
+  .pulse-footer-actions {
+    margin-right: -8px;
+    margin-left: -8px;
   }
 }

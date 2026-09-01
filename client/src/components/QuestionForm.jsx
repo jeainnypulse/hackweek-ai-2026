@@ -1,5 +1,3 @@
-import { Typography } from '@pulse-analytics/pulse-design-system'
-
 export default function QuestionForm({
   question,
   onQuestionChange,
@@ -25,18 +23,6 @@ export default function QuestionForm({
         onKeyDown={handleKeyDown}
         disabled={inConversation || loading}
       />
-      <div className="pulse-composer-actions">
-        <button
-          type="button"
-          onClick={() => onSubmit()}
-          disabled={loading || !question.trim() || inConversation}
-          className="pulse-submit"
-        >
-          <Typography variant="Body25.Semibold">
-            {loading && !inConversation ? 'Thinking...' : 'Submit'}
-          </Typography>
-        </button>
-      </div>
     </div>
   )
 }

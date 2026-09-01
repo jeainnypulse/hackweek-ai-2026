@@ -116,34 +116,56 @@ export default function App() {
                 history={chat.history}
                 onSelect={chat.showHistoryItem}
               />
+
+              <section>
+                <Typography
+                  variant="Body50.Regular"
+                  style={{
+                    color: Colors.Gray500,
+                    display: "block",
+                    margin: "24px 0",
+                    textAlign: "center",
+                  }}
+                >
+                  Or input your own:
+                </Typography>
+                <QuestionForm
+                  question={chat.question}
+                  onQuestionChange={chat.setQuestion}
+                  onSubmit={chat.ask}
+                  loading={chat.loading}
+                  inConversation={chat.inConversation}
+                />
+              </section>
             </div>
 
             <footer className="pulse-drawer-footer">
-              <Typography
-                variant="Body30.Regular"
-                style={{ color: Colors.Gray500 }}
-              >
-                Or input your own:
-              </Typography>
-              <QuestionForm
-                question={chat.question}
-                onQuestionChange={chat.setQuestion}
-                onSubmit={chat.ask}
-                loading={chat.loading}
-                inConversation={chat.inConversation}
-              />
               <Typography
                 variant="Body25.Regular"
                 className="pulse-support-copy"
               >
                 If you need assistance, please contact{" "}
-                <Typography
-                  variant="Body25.Regular"
-                  href="mailto:support@pulse.norstella.com"
-                >
+                <a href="mailto:support@pulse.norstella.com">
                   support@pulse.norstella.com
-                </Typography>
+                </a>
               </Typography>
+              <div className="pulse-footer-actions">
+                <button
+                  type="button"
+                  onClick={() => chat.ask()}
+                  disabled={
+                    chat.loading || !chat.question.trim() || chat.inConversation
+                  }
+                  className="pulse-submit"
+                  style={{ backgroundColor: Colors.Primary }}
+                >
+                  <Typography variant="Body25.Semibold">
+                    {chat.loading && !chat.inConversation
+                      ? "Thinking..."
+                      : "Submit"}
+                  </Typography>
+                </button>
+              </div>
             </footer>
           </aside>
         </>
