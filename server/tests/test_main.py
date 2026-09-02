@@ -144,6 +144,65 @@ class MainApiTests(unittest.TestCase):
         self.assertEqual(result["status"], "needs_input")
         self.assertEqual(result["input_mode"], "dropdown")
 
+    def test_guided_lives_request_forwards_explicit_intent(self):
+        turn = {
+            "status": "needs_input",
+            "session_id": "session-lives",
+            "question": "How many covered lives does a payer have?",
+            "current_slot": "organization",
+            "candidates": ["Aetna", "Centene"],
+            "intent": "lives",
+        }
+
+        with patch(
+            "main.handle_conversation_turn", return_value=turn
+        ) as handle_turn:
+            result = main.ask(
+                main.AskRequest(
+                    question="How many covered lives does a payer have?",
+                    guided=True,
+                    guided_intent="lives",
+                )
+            )
+
+        handle_turn.assert_called_once_with(
+            question="How many covered lives does a payer have?",
+            guided=True,
+            guided_intent="lives",
+            guided_slots={},
+        )
+        self.assertEqual(result["current_slot"], "organization")
+        self.assertEqual(result["intent"], "lives")
+
+    def test_guided_request_forwards_slots_already_in_prompt(self):
+        turn = {
+            "status": "needs_input",
+            "session_id": "session-access",
+            "question": "What is a payer's commercial coverage?",
+            "current_slot": "organization",
+            "candidates": ["Aetna", "Cigna"],
+            "intent": "access",
+        }
+
+        with patch(
+            "main.handle_conversation_turn", return_value=turn
+        ) as handle_turn:
+            main.ask(
+                main.AskRequest(
+                    question="What is a payer's commercial coverage?",
+                    guided=True,
+                    guided_intent="access",
+                    guided_slots={"book": "Commercial"},
+                )
+            )
+
+        handle_turn.assert_called_once_with(
+            question="What is a payer's commercial coverage?",
+            guided=True,
+            guided_intent="access",
+            guided_slots={"book": "Commercial"},
+        )
+
     def test_ask_complete_contract_includes_session_and_link_info(self):
         turn = {
             "status": "complete",

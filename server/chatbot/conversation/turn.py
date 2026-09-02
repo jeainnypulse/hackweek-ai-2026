@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 import uuid
 
 from chatbot.conversation.actions import handle_continuation
@@ -76,6 +76,9 @@ def handle_conversation_turn(
     session_id: Optional[str] = None,
     action: Optional[str] = None,
     value: Optional[Any] = None,
+    guided: bool = False,
+    guided_intent: Optional[Literal["access", "lives", "joint"]] = None,
+    guided_slots: Optional[dict[str, str]] = None,
 ) -> dict:
     """Start a question or delegate an action for an existing session."""
     if session_id and action:
@@ -92,7 +95,7 @@ def handle_conversation_turn(
             "intent": None,
         }
 
-    intent = classify_intent(question)  # LLM
+    intent = (guided_intent or "access") if guided else classify_intent(question)
     if intent == "out_of_scope":
         return {
             "status": "complete",
@@ -107,7 +110,11 @@ def handle_conversation_turn(
             "intent": "out_of_scope",
         }
 
-    slots = extract_slots(question, intent=intent)  # LLM
+    slots = (
+        dict(guided_slots or {})
+        if guided
+        else extract_slots(question, intent=intent)
+    )
     print(f"[conversation] intent={intent} slots: {slots}")
     if intent == "lives":
         catalogs = {
@@ -155,6 +162,7 @@ def handle_conversation_turn(
         "link_info": link_info,
         "pending_writebacks": [],
         "current_slot": None,
+        "guided": guided,
     }
     _sessions[session_id] = session
 

@@ -25,6 +25,9 @@ app.add_middleware(
 class AskRequest(BaseModel):
     question: str = ""
     skip_log: bool = False
+    guided: bool = False
+    guided_intent: Optional[Literal["access", "lives", "joint"]] = None
+    guided_slots: Optional[dict[str, str]] = None
     session_id: Optional[str] = None
     action: Optional[Literal["provide"]] = None
     value: Optional[str] = None
@@ -108,7 +111,12 @@ def ask(req: AskRequest):
                 value=req.value,
             )
         elif req.question.strip():
-            turn = handle_conversation_turn(question=req.question.strip())
+            turn_args = {"question": req.question.strip()}
+            if req.guided:
+                turn_args["guided"] = True
+                turn_args["guided_intent"] = req.guided_intent or "access"
+                turn_args["guided_slots"] = req.guided_slots or {}
+            turn = handle_conversation_turn(**turn_args)
         else:
             raise HTTPException(
                 status_code=400,

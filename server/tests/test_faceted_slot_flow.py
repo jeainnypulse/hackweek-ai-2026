@@ -13,7 +13,7 @@ from chatbot.conversation.slot_plan import (
     required_slots,
 )
 from chatbot.conversation.state import _sessions
-from chatbot.conversation.turn import _prepare_lives_fields
+from chatbot.conversation.turn import _prepare_lives_fields, handle_conversation_turn
 from chatbot.query_resolution.cascade_clarify import (
     distinct_values,
     filter_from_confirmed,
@@ -252,6 +252,29 @@ class FacetedProgressionTests(unittest.TestCase):
         )
         complete.assert_called_once_with(session)
 
+    def test_guided_flow_also_auto_confirms_sole_options(self) -> None:
+        session = _session()
+        session["guided"] = True
+        options = {field: [value] for field, value in ACCESS_VALUES.items()}
+        with (
+            patch(
+                "chatbot.conversation.resolution._distinct_for_session",
+                side_effect=_field_options(options),
+            ),
+            patch(
+                "chatbot.conversation.resolution._complete_from_session",
+                return_value={"status": "complete"},
+            ) as complete,
+        ):
+            response = resolve_next_slot(session)
+
+        self.assertEqual(response["status"], "complete")
+        self.assertEqual(
+            {field: session["linked"][field] for field in ACCESS_SLOTS},
+            ACCESS_VALUES,
+        )
+        complete.assert_called_once_with(session)
+
     def test_invalid_selection_is_not_confirmed(self) -> None:
         session = _session()
         session["current_slot"] = "regimen"
@@ -385,6 +408,40 @@ class FacetedProgressionTests(unittest.TestCase):
 
 
 class LivesAndJointTests(unittest.TestCase):
+    def test_guided_lives_starts_with_payer_without_llm_calls(self) -> None:
+        with (
+            patch("chatbot.conversation.turn.classify_intent") as classify,
+            patch("chatbot.conversation.turn.extract_slots") as extract,
+            patch(
+                "chatbot.conversation.turn.load_catalogs_from_db",
+                return_value={},
+            ),
+            patch(
+                "chatbot.conversation.turn.load_territory_catalog_from_db",
+                return_value={},
+            ),
+            patch(
+                "chatbot.conversation.turn.link_slots",
+                return_value=({}, {}),
+            ),
+            patch(
+                "chatbot.conversation.turn._linker_clarify_response",
+                side_effect=lambda session: session,
+            ),
+        ):
+            session = handle_conversation_turn(
+                question="How many covered lives does a payer have?",
+                guided=True,
+                guided_intent="lives",
+            )
+
+        classify.assert_not_called()
+        extract.assert_not_called()
+        self.assertEqual(session["intent"], "lives")
+        self.assertEqual(session["slots"], {})
+        self.assertTrue(session["guided"])
+        self.assertEqual(required_slots(session["intent"])[0], "organization")
+
     def test_missing_lives_territory_gets_national_default(self) -> None:
         session = _session(
             "lives",
