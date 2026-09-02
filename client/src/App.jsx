@@ -12,6 +12,7 @@ const SUGGESTED_QUESTIONS = [
   {
     question: "What is a payer's commercial coverage for my regimen?",
     intent: "access",
+    slots: { book: "Commercial" },
   },
   {
     question: "QoA for a specific regimen, line and indication",
@@ -90,11 +91,11 @@ export default function App() {
                   <PulseAiIcon className="pulse-welcome-mark" />
                   <AppHeader />
                   <div className="pulse-suggestions">
-                    {SUGGESTED_QUESTIONS.map(({ question, intent }) => (
+                    {SUGGESTED_QUESTIONS.map(({ question, intent, slots }) => (
                       <button
                         type="button"
                         key={question}
-                        onClick={() => chat.ask(question, intent)}
+                        onClick={() => chat.ask(question, intent, slots)}
                         style={{
                           backgroundColor: `${Colors.Primary}1A`,
                           color: Colors.Primary,

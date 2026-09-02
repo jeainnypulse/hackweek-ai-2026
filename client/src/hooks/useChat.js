@@ -40,7 +40,7 @@ export default function useChat() {
     }
   }
 
-  async function ask(questionOverride, guidedIntent = null) {
+  async function ask(questionOverride, guidedIntent = null, guidedSlots = null) {
     const nextQuestion =
       typeof questionOverride === 'string' ? questionOverride : question
     if (!nextQuestion.trim()) return
@@ -55,7 +55,7 @@ export default function useChat() {
     setActiveQuestion(asked)
 
     try {
-      const data = await askQuestion(asked, guidedIntent)
+      const data = await askQuestion(asked, guidedIntent, guidedSlots)
       applyAskResponse(data, asked, [])
       setQuestion('')
     } catch (requestError) {

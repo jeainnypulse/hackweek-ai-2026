@@ -82,6 +82,7 @@ export default function ClarificationForm({
               disableUIForSingleOption={false}
               placeholderText={slotLabel}
               dropdownWidth={{ width: '100%', maxWidth: 'none' }}
+              menuPortalTarget={null}
               selectProps={{ 'aria-label': `Choose ${slotLabel}` }}
             />
           </div>
