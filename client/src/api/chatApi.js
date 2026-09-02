@@ -29,8 +29,16 @@ async function postJson(path, body, fallbackError) {
   return data;
 }
 
-export function askQuestion(question) {
-  return postJson("/api/ask", { question }, "Something went wrong");
+export function askQuestion(question, guidedIntent = null) {
+  return postJson(
+    "/api/ask",
+    {
+      question,
+      guided: Boolean(guidedIntent),
+      guided_intent: guidedIntent,
+    },
+    "Something went wrong",
+  );
 }
 
 export function continueConversation({ question, sessionId, value }) {

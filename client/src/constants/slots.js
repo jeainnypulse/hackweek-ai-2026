@@ -1,5 +1,5 @@
 export const SLOT_LABELS = {
-  regimen: 'Product',
+  regimen: 'Regimen',
   indication: 'Indication',
   book: 'Book',
   coverage: 'Coverage',

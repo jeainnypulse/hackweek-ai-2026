@@ -9,14 +9,27 @@ import ResultCard from "./components/ResultCard";
 import useChat from "./hooks/useChat";
 
 const SUGGESTED_QUESTIONS = [
-  "What is a payer's commercial coverage for my regimen?",
-  "QoA for a specific regimen, line and indication",
-  "Which payers restrict a regimen more than the FDA label?",
+  {
+    question: "What is a payer's commercial coverage for my regimen?",
+    intent: "access",
+  },
+  {
+    question: "QoA for a specific regimen, line and indication",
+    intent: "access",
+  },
+  {
+    question: "How many covered lives does a payer have?",
+    intent: "lives",
+  },
 ];
 
 export default function App() {
   const chat = useChat();
   const [panelOpen, setPanelOpen] = useState(false);
+  const previousMessages = chat.history
+    .filter((item) => item.result.id !== chat.result?.id)
+    .slice()
+    .reverse();
 
   return (
     <main className="pulse-workspace">
@@ -65,17 +78,23 @@ export default function App() {
               </button>
             </header>
 
-            <div className="pulse-drawer-content">
+            <div
+              className={`pulse-drawer-content${
+                chat.loading || chat.result
+                  ? " pulse-drawer-content-chatting"
+                  : ""
+              }`}
+            >
               {!chat.result && !chat.loading && !chat.error && (
                 <section className="pulse-welcome">
                   <PulseAiIcon className="pulse-welcome-mark" />
                   <AppHeader />
                   <div className="pulse-suggestions">
-                    {SUGGESTED_QUESTIONS.map((question) => (
+                    {SUGGESTED_QUESTIONS.map(({ question, intent }) => (
                       <button
                         type="button"
                         key={question}
-                        onClick={() => chat.ask(question)}
+                        onClick={() => chat.ask(question, intent)}
                         style={{
                           backgroundColor: `${Colors.Primary}1A`,
                           color: Colors.Primary,
@@ -102,41 +121,76 @@ export default function App() {
                 </div>
               )}
 
-              <ResultCard
-                result={chat.result}
-                loading={chat.loading}
-                slotInput={chat.slotInput}
-                onSlotInputChange={chat.setSlotInput}
-                onSubmitSlot={chat.submitSlotValue}
-                onFeedback={chat.submitFeedback}
-                onStartOver={chat.startOver}
-              />
+              {(chat.loading || chat.result) && (
+                <div className="pulse-chat-transcript">
+                  {previousMessages.map((item, index) => (
+                    <ResultCard
+                      key={item.result.id || `${item.question}-${index}`}
+                      result={item.result}
+                      loading={false}
+                      question={item.question}
+                      slotTurns={item.slotTurns || []}
+                      slotInput=""
+                      onSlotInputChange={chat.setSlotInput}
+                      onSubmitSlot={chat.submitSlotValue}
+                      onFeedback={chat.submitFeedback}
+                      onStartOver={chat.startOver}
+                    />
+                  ))}
+                  <ResultCard
+                    result={chat.result}
+                    loading={chat.loading}
+                    question={chat.activeQuestion}
+                    slotTurns={chat.slotTurns}
+                    slotInput={chat.slotInput}
+                    onSlotInputChange={chat.setSlotInput}
+                    onSubmitSlot={chat.submitSlotValue}
+                    onFeedback={chat.submitFeedback}
+                    onStartOver={chat.startOver}
+                  />
+                </div>
+              )}
 
-              <ChatHistory
-                history={chat.history}
-                onSelect={chat.showHistoryItem}
-              />
+              {!chat.loading && chat.result?.status === "complete" && (
+                <section className="pulse-follow-up-composer">
+                  <QuestionForm
+                    question={chat.question}
+                    onQuestionChange={chat.setQuestion}
+                    onSubmit={chat.ask}
+                    loading={chat.loading}
+                    inConversation={chat.inConversation}
+                  />
+                </section>
+              )}
 
-              <section>
-                <Typography
-                  variant="Body50.Regular"
-                  style={{
-                    color: Colors.Gray500,
-                    display: "block",
-                    margin: "24px 0",
-                    textAlign: "center",
-                  }}
-                >
-                  Or input your own:
-                </Typography>
-                <QuestionForm
-                  question={chat.question}
-                  onQuestionChange={chat.setQuestion}
-                  onSubmit={chat.ask}
-                  loading={chat.loading}
-                  inConversation={chat.inConversation}
-                />
-              </section>
+              {!chat.loading && !chat.result && (
+                <>
+                  <ChatHistory
+                    history={chat.history}
+                    onSelect={chat.showHistoryItem}
+                  />
+                  <section>
+                    <Typography
+                      variant="Body50.Regular"
+                      style={{
+                        color: Colors.Gray500,
+                        display: "block",
+                        margin: "24px 0",
+                        textAlign: "center",
+                      }}
+                    >
+                      Or input your own:
+                    </Typography>
+                    <QuestionForm
+                      question={chat.question}
+                      onQuestionChange={chat.setQuestion}
+                      onSubmit={chat.ask}
+                      loading={chat.loading}
+                      inConversation={chat.inConversation}
+                    />
+                  </section>
+                </>
+              )}
             </div>
 
             <footer className="pulse-drawer-footer">
@@ -149,23 +203,6 @@ export default function App() {
                   support@pulse.norstella.com
                 </a>
               </Typography>
-              <div className="pulse-footer-actions">
-                <button
-                  type="button"
-                  onClick={() => chat.ask()}
-                  disabled={
-                    chat.loading || !chat.question.trim() || chat.inConversation
-                  }
-                  className="pulse-submit"
-                  style={{ backgroundColor: Colors.Primary }}
-                >
-                  <Typography variant="Body25.Semibold">
-                    {chat.loading && !chat.inConversation
-                      ? "Thinking..."
-                      : "Submit"}
-                  </Typography>
-                </button>
-              </div>
             </footer>
           </aside>
         </>
