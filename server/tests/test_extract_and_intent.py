@@ -5,7 +5,239 @@ import unittest
 from unittest.mock import call, patch
 
 from chatbot import intent_classifier as intent
+from chatbot.slot_extract import access_extract
 from chatbot.slot_extract import utils
+
+
+class AccessExtractGroundingTests(unittest.TestCase):
+    def test_exact_question_regimen_overrides_conflicting_llm_value(self) -> None:
+        catalogs = {"regimen": ["Tregzi", "Tecvayli"]}
+        with (
+            patch.object(
+                access_extract,
+                "invoke_json_extract",
+                return_value={"regimen": "Tecvayli"},
+            ),
+            patch.object(
+                access_extract,
+                "load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+        ):
+            slots = access_extract.extract_access_slots(
+                "Is Tregzi unrestricted at Aetna?"
+            )
+
+        self.assertEqual(slots["regimen"], "Tregzi")
+
+    def test_longest_exact_regimen_wins_over_contained_name(self) -> None:
+        catalogs = {"regimen": ["Keytruda", "Keytruda Qlex"]}
+
+        result = access_extract._exact_catalog_value_from_question(
+            "What is the access for Keytruda Qlex?",
+            "regimen",
+            catalogs,
+        )
+
+        self.assertEqual(result, "Keytruda Qlex")
+
+    def test_multiple_distinct_regimen_mentions_are_ambiguous(self) -> None:
+        catalogs = {"regimen": ["Tregzi", "Tecvayli"]}
+
+        result = access_extract._exact_catalog_value_from_question(
+            "Compare Tregzi and Tecvayli",
+            "regimen",
+            catalogs,
+        )
+
+        self.assertIsNone(result)
+
+    def test_regimen_match_requires_token_boundaries(self) -> None:
+        catalogs = {"regimen": ["Tregzi"]}
+
+        result = access_extract._exact_catalog_value_from_question(
+            "Is Notregzi covered?",
+            "regimen",
+            catalogs,
+        )
+
+        self.assertIsNone(result)
+
+    def test_existing_llm_value_is_preserved_without_exact_match(self) -> None:
+        catalogs = {"regimen": ["Tregzi", "Tecvayli"]}
+        with (
+            patch.object(
+                access_extract,
+                "invoke_json_extract",
+                return_value={"regimen": "Tregzi"},
+            ),
+            patch.object(
+                access_extract,
+                "load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+        ):
+            slots = access_extract.extract_access_slots(
+                "Is Tregzy unrestricted at Aetna?"
+            )
+
+        self.assertEqual(slots["regimen"], "Tregzi")
+
+    def test_exact_question_book_overrides_conflicting_llm_value(self) -> None:
+        catalogs = {
+            "regimen": ["Tregzi"],
+            "book": ["MAC", "Medicare"],
+        }
+        with (
+            patch.object(
+                access_extract,
+                "invoke_json_extract",
+                return_value={"regimen": "Tregzi", "book": "Medicare"},
+            ),
+            patch.object(
+                access_extract,
+                "load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+        ):
+            slots = access_extract.extract_access_slots(
+                "How does CGS cover Tregzi under MAC?"
+            )
+
+        self.assertEqual(slots["book"], "MAC")
+
+    def test_longest_exact_book_wins_over_contained_name(self) -> None:
+        catalogs = {"book": ["Medicaid", "FFS Medicaid"]}
+
+        result = access_extract._exact_catalog_value_from_question(
+            "Tregzi access for State of Alabama FFS Medicaid",
+            "book",
+            catalogs,
+        )
+
+        self.assertEqual(result, "FFS Medicaid")
+
+    def test_short_exact_token_does_not_replace_longer_extracted_book(self) -> None:
+        catalogs = {
+            "regimen": ["Tregzi"],
+            "book": ["Medicaid", "Managed Medicaid"],
+        }
+        with (
+            patch.object(
+                access_extract,
+                "invoke_json_extract",
+                return_value={
+                    "regimen": "Tregzi",
+                    "book": "Managed Medicaid",
+                },
+            ),
+            patch.object(
+                access_extract,
+                "load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+        ):
+            slots = access_extract.extract_access_slots(
+                "Tregzi access on managd medicaid"
+            )
+
+        self.assertEqual(slots["book"], "Managed Medicaid")
+
+    def test_unsupported_longer_book_is_replaced_by_exact_question_book(self) -> None:
+        catalogs = {
+            "regimen": ["Tregzi"],
+            "book": ["Medicaid", "Managed Medicaid"],
+        }
+        with (
+            patch.object(
+                access_extract,
+                "invoke_json_extract",
+                return_value={
+                    "regimen": "Tregzi",
+                    "book": "Managed Medicaid",
+                },
+            ),
+            patch.object(
+                access_extract,
+                "load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+        ):
+            slots = access_extract.extract_access_slots(
+                "Tregzi access at the State of Nevada Medicaid program"
+            )
+
+        self.assertEqual(slots["book"], "Medicaid")
+
+    def test_extracted_medicaid_suffix_is_removed_from_exact_payer(self) -> None:
+        catalogs = {
+            "organization": ["State of Nevada"],
+            "book": ["FFS Medicaid"],
+        }
+
+        result = access_extract._organization_without_book_suffix(
+            "State of Nevada Medicaid",
+            "Medicaid",
+            catalogs,
+        )
+
+        self.assertEqual(result, "State of Nevada")
+
+    def test_catalog_book_suffix_is_removed_from_exact_payer(self) -> None:
+        catalogs = {
+            "organization": ["State of Alabama"],
+            "book": ["FFS Medicaid"],
+        }
+
+        result = access_extract._organization_without_book_suffix(
+            "State of Alabama FFS Medicaid",
+            "Medicaid",
+            catalogs,
+        )
+
+        self.assertEqual(result, "State of Alabama")
+
+    def test_longest_book_suffix_is_tried_first(self) -> None:
+        catalogs = {
+            "organization": ["State of Alabama", "State of Alabama FFS"],
+            "book": ["FFS Medicaid"],
+        }
+
+        result = access_extract._organization_without_book_suffix(
+            "State of Alabama FFS Medicaid",
+            "Medicaid",
+            catalogs,
+        )
+
+        self.assertEqual(result, "State of Alabama")
+
+    def test_book_suffix_is_preserved_when_payer_remainder_is_unknown(self) -> None:
+        catalogs = {
+            "organization": ["State of Nevada"],
+            "book": ["FFS Medicaid"],
+        }
+
+        result = access_extract._organization_without_book_suffix(
+            "Unknown State Medicaid",
+            "Medicaid",
+            catalogs,
+        )
+
+        self.assertIsNone(result)
+
+    def test_ordinary_payer_name_is_not_changed(self) -> None:
+        catalogs = {
+            "organization": ["Molina Healthcare"],
+            "book": ["Managed Medicaid"],
+        }
+
+        result = access_extract._organization_without_book_suffix(
+            "Molina Healthcare",
+            "Managed Medicaid",
+            catalogs,
+        )
+
+        self.assertIsNone(result)
 
 
 class ExtractUtilsTests(unittest.TestCase):

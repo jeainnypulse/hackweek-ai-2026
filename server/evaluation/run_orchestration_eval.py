@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Run orchestration / lives eval from the terminal (no UI).
+Run orchestration, access workflow, or lives eval from the terminal (no UI).
 
 Usage (from server/):
   python evaluation/generate_decision_path_eval.py
   python evaluation/run_orchestration_eval.py
   python evaluation/run_orchestration_eval.py --classify-only
   python evaluation/run_orchestration_eval.py --limit 10
+  python evaluation/run_orchestration_eval.py --access --csv /path/to/eval.csv
   python evaluation/run_orchestration_eval.py --lives
   python evaluation/run_orchestration_eval.py --lives --csv /path/to/eval.csv
   python evaluation/run_orchestration_eval.py --joint
   python evaluation/run_orchestration_eval.py --joint --csv /path/to/eval.csv
 
-Results go to hackweek-ai-2026-test-results/results/<input_stem>_results.csv.
+Access results go to evaluation/results/<input_stem>_access_results.csv.
+Other results go to hackweek-ai-2026-test-results/results/<input_stem>_results.csv.
 If that file exists, the name increments: _results_1, _results_2, ...
 Pass --out only to override the destination.
 """
@@ -29,6 +31,7 @@ SERVER_DIR = Path(__file__).resolve().parent.parent
 RESULTS_DIR = (
     Path.home() / "Desktop" / "work" / "hackweek-ai-2026-test-results" / "results"
 )
+ACCESS_RESULTS_DIR = SERVER_DIR / "evaluation" / "results"
 sys.path.insert(0, str(SERVER_DIR))
 
 from dotenv import load_dotenv
@@ -39,11 +42,16 @@ os.environ.setdefault("ENTITY_LINK_METHOD", "cascade")
 from evaluation.orchestration import (  # noqa: E402
     EVAL_LIVES_CSV_PATH,
     FALLBACK_CSV_PATH,
+    load_access_questions,
     load_joint_questions,
     load_lives_questions,
     load_orchestration_questions,
     orchestration_results_to_csv,
     run_orchestration_questions,
+)
+from evaluation.access_workflow import (  # noqa: E402
+    access_results_to_csv,
+    run_access_questions,
 )
 
 
@@ -81,8 +89,10 @@ def _read_eval_csv(path: Path) -> str:
     return text
 
 
-def _auto_results_path(csv_path: Path) -> Path:
+def _auto_results_path(csv_path: Path, *, access: bool = False) -> Path:
     suffix = csv_path.suffix or ".csv"
+    if access:
+        return ACCESS_RESULTS_DIR / f"{csv_path.stem}_access_results{suffix}"
     return RESULTS_DIR / f"{csv_path.stem}_results{suffix}"
 
 
@@ -103,6 +113,12 @@ def _print_row(index: int, total: int, row: dict) -> None:
         )
     if comparison.get("slots_match") is not None:
         line += f" slots={comparison.get('slots_match')}"
+    if comparison.get("extraction_match") is not None:
+        line += f" extract={comparison.get('extraction_match')}"
+    if comparison.get("linking_match") is not None:
+        line += f" link={comparison.get('linking_match')}"
+    if comparison.get("retrieval_match") is not None:
+        line += f" retrieve={comparison.get('retrieval_match')}"
     line += f" {row.get('question')!r}"
     print(line, flush=True)
     if row.get("error"):
@@ -118,8 +134,15 @@ def _print_row(index: int, total: int, row: dict) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Orchestration / lives eval (terminal)")
+    parser = argparse.ArgumentParser(
+        description="Orchestration, access workflow, or lives eval (terminal)"
+    )
     parser.add_argument("--csv", type=Path, default=None)
+    parser.add_argument(
+        "--access",
+        action="store_true",
+        help="Run stage-level access workflow eval plus OOS negative controls.",
+    )
     parser.add_argument(
         "--lives",
         action="store_true",
@@ -147,14 +170,23 @@ def main() -> None:
         type=Path,
         default=None,
         help=(
-            "Results CSV path. Default: "
+            "Results CSV path. Access default: "
+            "server/evaluation/results/<input>_access_results.csv. "
+            "Other default: "
             "~/Desktop/work/hackweek-ai-2026-test-results/results/<input>_results.csv "
             "(increments _results_1, _results_2, ... if the file exists)"
         ),
     )
     args = parser.parse_args()
+    if sum((args.access, args.lives, args.joint)) > 1:
+        parser.error("--access, --lives, and --joint are mutually exclusive")
+    if args.access and args.classify_only:
+        parser.error("--access evaluates the full workflow; omit --classify-only")
 
-    if args.joint:
+    if args.access:
+        loader = load_access_questions
+        default_csv = FALLBACK_CSV_PATH
+    elif args.joint:
         loader = load_joint_questions
         default_csv = FALLBACK_CSV_PATH
     elif args.lives:
@@ -176,7 +208,9 @@ def main() -> None:
     print(
         f"Running {len(questions)} questions from {csv_path} "
         f"({'classify-only' if args.classify_only else 'full first turn'}"
-        f"{', joint' if args.joint else ', lives' if args.lives else ''})",
+        f"{', access workflow' if args.access else ''}"
+        f"{', joint' if args.joint else ''}"
+        f"{', lives' if args.lives else ''})",
         flush=True,
     )
 
@@ -185,12 +219,20 @@ def main() -> None:
         if args.sleep and index < total:
             time.sleep(args.sleep)
 
-    result = run_orchestration_questions(
-        questions, classify_only=args.classify_only, on_row=on_row
-    )
-    csv_body = orchestration_results_to_csv(result["results"])
+    if args.access:
+        result = run_access_questions(questions, on_row=on_row)
+        csv_body = access_results_to_csv(result["results"])
+    else:
+        result = run_orchestration_questions(
+            questions, classify_only=args.classify_only, on_row=on_row
+        )
+        csv_body = orchestration_results_to_csv(result["results"])
     out_path = _unused_results_path(
-        (args.out if args.out else _auto_results_path(csv_path)).expanduser()
+        (
+            args.out
+            if args.out
+            else _auto_results_path(csv_path, access=args.access)
+        ).expanduser()
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(csv_body, encoding="utf-8")
@@ -199,6 +241,14 @@ def main() -> None:
         f"pass_rate={result['pass_rate']}",
         flush=True,
     )
+    if args.access:
+        print(
+            "extraction_diagnostic="
+            f"{result['extraction_passed']}/{result['extraction_scored']} "
+            f"rate={result['extraction_rate']} "
+            "(not included in workflow pass rate)",
+            flush=True,
+        )
     print(f"Saved: {out_path}", flush=True)
     sys.exit(0 if result["passed"] == result["scored"] else 1)
 

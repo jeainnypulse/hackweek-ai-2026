@@ -42,19 +42,32 @@ def _parse_json_cell(raw: Any) -> Any:
         return text
 
 
-def normalize_orchestration_row(row: dict, index: int) -> dict:
-    expected_lives = row.get("expected_lives")
-    if expected_lives in ("", None):
-        expected_lives = None
-    else:
-        try:
-            expected_lives = int(float(str(expected_lives).replace(",", "")))
-        except (TypeError, ValueError):
-            expected_lives = None
+def _json_object(raw: Any) -> Optional[dict]:
+    value = _parse_json_cell(raw)
+    return value if isinstance(value, dict) else None
 
-    slots = _parse_json_cell(row.get("expected_slots"))
-    if not isinstance(slots, dict):
-        slots = None
+
+def _json_list(raw: Any) -> Optional[list]:
+    value = _parse_json_cell(raw)
+    return value if isinstance(value, list) else None
+
+
+def _optional_int(raw: Any) -> Optional[int]:
+    if raw in ("", None):
+        return None
+    try:
+        return int(float(str(raw).replace(",", "")))
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_orchestration_row(row: dict, index: int) -> dict:
+    slots = _json_object(row.get("expected_slots"))
+    extracted = _json_object(row.get("expected_extracted_slots"))
+    resolved = _json_object(row.get("expected_resolved_slots"))
+    candidates = _json_list(row.get("expected_candidates"))
+    steps = _json_list(row.get("clarification_steps"))
+    record_fields = _json_object(row.get("expected_record_fields"))
 
     return {
         "id": row.get("id") or str(index + 1),
@@ -64,7 +77,16 @@ def normalize_orchestration_row(row: dict, index: int) -> dict:
         "expected_intent": (row.get("expected_intent") or "").strip().lower(),
         "expected_behavior": (row.get("expected_behavior") or "").strip().lower(),
         "expected_slots": slots,
-        "expected_lives": expected_lives,
+        "expected_extracted_slots": extracted,
+        "expected_resolved_slots": resolved,
+        "expected_current_slot": (
+            row.get("expected_current_slot") or ""
+        ).strip(),
+        "expected_candidates": candidates,
+        "clarification_steps": steps,
+        "expected_record_count": _optional_int(row.get("expected_record_count")),
+        "expected_record_fields": record_fields,
+        "expected_lives": _optional_int(row.get("expected_lives")),
         "citation": (row.get("citation") or row.get("eval_notes") or "").strip(),
     }
 
@@ -116,6 +138,16 @@ def load_joint_questions(csv_text: str) -> list[dict]:
         q
         for q in questions
         if q.get("expected_intent") in ("joint", "out_of_scope")
+    ]
+
+
+def load_access_questions(csv_text: Optional[str] = None) -> list[dict]:
+    """Load access rows plus out-of-scope negative controls."""
+    questions = load_orchestration_questions(csv_text)
+    return [
+        question
+        for question in questions
+        if question.get("expected_intent") in ("access", "out_of_scope")
     ]
 
 

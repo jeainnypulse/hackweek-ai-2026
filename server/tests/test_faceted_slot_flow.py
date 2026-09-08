@@ -406,6 +406,89 @@ class FacetedProgressionTests(unittest.TestCase):
         self.assertEqual(rejected["status"], "error")
         self.assertIn("provide", rejected["message"])
 
+    def test_exact_question_regimen_reaches_linker_instead_of_llm_substitute(
+        self,
+    ) -> None:
+        catalogs = {"regimen": ["Tregzi", "Tecvayli"]}
+        with (
+            patch(
+                "chatbot.conversation.turn.classify_intent",
+                return_value="access",
+            ),
+            patch(
+                "chatbot.slot_extract.access_extract.invoke_json_extract",
+                return_value={"regimen": "Tecvayli", "organization": "Aetna"},
+            ),
+            patch(
+                "chatbot.slot_extract.access_extract.load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+            patch(
+                "chatbot.conversation.turn.link_slots",
+                return_value=(
+                    {"regimen": "Tregzi", "organization": "Aetna"},
+                    {},
+                ),
+            ) as link_slots,
+            patch(
+                "chatbot.conversation.turn._linker_clarify_response",
+                side_effect=lambda session: session,
+            ),
+        ):
+            session = handle_conversation_turn(
+                question="Is Tregzi unrestricted at Aetna?"
+            )
+
+        self.assertEqual(session["slots"]["regimen"], "Tregzi")
+        self.assertEqual(link_slots.call_args.args[0]["regimen"], "Tregzi")
+
+    def test_combined_payer_book_reaches_linker_as_separate_slots(self) -> None:
+        catalogs = {
+            "organization": ["State of Nevada"],
+            "regimen": ["Tregzi"],
+            "book": ["FFS Medicaid"],
+        }
+        with (
+            patch(
+                "chatbot.conversation.turn.classify_intent",
+                return_value="access",
+            ),
+            patch(
+                "chatbot.slot_extract.access_extract.invoke_json_extract",
+                return_value={
+                    "regimen": "Tregzi",
+                    "organization": "State of Nevada Medicaid",
+                    "book": "Medicaid",
+                },
+            ),
+            patch(
+                "chatbot.slot_extract.access_extract.load_catalogs_from_db",
+                return_value=catalogs,
+            ),
+            patch(
+                "chatbot.conversation.turn.link_slots",
+                return_value=(
+                    {
+                        "regimen": "Tregzi",
+                        "organization": "State of Nevada",
+                        "book": "FFS Medicaid",
+                    },
+                    {},
+                ),
+            ) as link_slots,
+            patch(
+                "chatbot.conversation.turn._linker_clarify_response",
+                side_effect=lambda session: session,
+            ),
+        ):
+            session = handle_conversation_turn(
+                question="Tregzi access at State of Nevada Medicaid"
+            )
+
+        self.assertEqual(session["slots"]["organization"], "State of Nevada")
+        self.assertEqual(link_slots.call_args.args[0]["organization"], "State of Nevada")
+        self.assertEqual(link_slots.call_args.args[0]["book"], "Medicaid")
+
 
 class LivesAndJointTests(unittest.TestCase):
     def test_guided_lives_starts_with_payer_without_llm_calls(self) -> None:
