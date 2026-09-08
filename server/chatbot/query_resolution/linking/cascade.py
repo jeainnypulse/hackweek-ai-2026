@@ -19,6 +19,19 @@ def resolve_cascade(
     """Run the production synonym, catalog, and verified-hypothesis cascade."""
     catalogs = catalogs or catalog_store.load_catalogs_from_db()
 
+    if dimension == "book" and str(mention).strip().casefold() == "medicaid":
+        medicaid_books = [
+            value
+            for value in catalogs.get(dimension) or []
+            if str(value).casefold() in {"ffs medicaid", "managed medicaid"}
+        ]
+        if len(medicaid_books) > 1:
+            return result(
+                "ambiguous",
+                candidates=medicaid_books,
+                method="cascade:clarify",
+            )
+
     if config.USE_SYNONYM_TABLE:
         resolved = catalog_match.resolve_synonym(dimension, mention)
         if resolved["status"] == "matched":

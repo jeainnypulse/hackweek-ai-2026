@@ -70,6 +70,26 @@ class CascadeResolutionTests(unittest.TestCase):
         self.assertEqual(result["method"], "cascade:catalog")
         llm_resolver.assert_not_called()
 
+    def test_generic_medicaid_requires_book_clarification(self) -> None:
+        result = resolve_cascade(
+            "book",
+            "Medicaid",
+            {
+                "book": [
+                    "Commercial",
+                    "FFS Medicaid",
+                    "Managed Medicaid",
+                ]
+            },
+        )
+
+        self.assertEqual(result["status"], "ambiguous")
+        self.assertEqual(
+            result["candidates"],
+            ["FFS Medicaid", "Managed Medicaid"],
+        )
+        self.assertEqual(result["method"], "cascade:clarify")
+
     def test_verified_llm_match_is_labeled_as_cascade_stage(self) -> None:
         hyp_result = {
             "status": "matched",

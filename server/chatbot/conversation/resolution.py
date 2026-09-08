@@ -48,6 +48,18 @@ def _scoped_candidates(
     info = session["link_info"].get(field) or {}
     raw = info.get("raw") or session["slots"].get(field)
     linker_candidates = info.get("candidates") or []
+    if field == "organization" and raw:
+        permissioned_organizations = _distinct_for_session(
+            session,
+            field,
+            {},
+        )
+        name_matches = _matching_organizations(
+            str(raw),
+            permissioned_organizations,
+        )
+        if name_matches:
+            return _matching_organizations(str(raw), options)
     if raw and linker_candidates:
         overlap = [value for value in options if value in set(linker_candidates)]
         if overlap:
@@ -78,6 +90,41 @@ def _record_confirmation(
         )
 
 
+def _matching_organizations(raw: str, organizations: list[str]) -> list[str]:
+    normalized_raw = normalize_key(raw)
+    raw_key = normalized_raw.replace(" ", "")
+    if not raw_key:
+        return []
+    generic_blue_tokens = set(normalized_raw.split()) - {
+        "the",
+        "plan",
+        "carrier",
+        "insurer",
+        "large",
+        "exchange",
+        "aca",
+        "s",
+    }
+    blue_family_reference = raw_key == "bcbs" or (
+        bool(generic_blue_tokens & {"blue", "blues"})
+        and generic_blue_tokens <= {"blue", "blues", "cross", "shield"}
+    )
+    if blue_family_reference:
+        return [
+            value
+            for value in organizations
+            if any(
+                marker in normalize_key(str(value)).replace(" ", "")
+                for marker in ("blue", "bcbs")
+            )
+        ]
+    return [
+        value
+        for value in organizations
+        if raw_key in normalize_key(str(value)).replace(" ", "")
+    ]
+
+
 def _should_learn_confirmation(
     field: str,
     raw: str,
@@ -87,17 +134,10 @@ def _should_learn_confirmation(
     if field != "organization":
         return True
 
-    raw_key = normalize_key(raw).replace(" ", "")
-    if not raw_key:
-        return False
     organizations = (
         catalog_store.load_catalogs_from_db().get("organization") or []
     )
-    matches = [
-        value
-        for value in organizations
-        if raw_key in normalize_key(str(value)).replace(" ", "")
-    ]
+    matches = _matching_organizations(raw, organizations)
     return len(matches) == 1 and matches[0] == canonical
 
 
@@ -184,12 +224,25 @@ def _empty_result(session: dict) -> dict:
     )
 
 
+def _ordered_unconfirmed_fields(session: dict) -> list[str]:
+    """Resolve explicit ambiguous mentions before wholly missing fields."""
+    pending = [
+        field
+        for field in required_slots(session.get("intent") or "access")
+        if not _is_confirmed(session, field)
+    ]
+    explicit = [
+        field
+        for field in pending
+        if (session["link_info"].get(field) or {}).get("raw")
+        or session["slots"].get(field) not in (None, "")
+    ]
+    return explicit + [field for field in pending if field not in explicit]
+
+
 def resolve_next_slot(session: dict) -> dict:
     """Confirm exactly one ordered facet at a time, then complete."""
-    for field in required_slots(session.get("intent") or "access"):
-        if _is_confirmed(session, field):
-            continue
-
+    for field in _ordered_unconfirmed_fields(session):
         options = _options_for(session, field)
         if not options:
             if _confirmed_filter(session, exclude=field):
@@ -201,7 +254,16 @@ def resolve_next_slot(session: dict) -> dict:
         canonical = resolve_selection(value, options)
         info = session["link_info"].get(field) or {}
 
-        if len(candidates) == 1:
+        if not candidates:
+            return _empty_result(session)
+
+        raw = info.get("raw") or session["slots"].get(field)
+        safe_sole_organization = (
+            field != "organization"
+            or not raw
+            or _should_learn_confirmation(field, str(raw), candidates[0])
+        )
+        if len(candidates) == 1 and safe_sole_organization:
             _record_confirmation(
                 session,
                 field,
@@ -258,10 +320,12 @@ def provide_current_slot(session: dict, value: object) -> dict:
 
     info = session["link_info"].get(field) or {}
     raw = info.get("raw") or session["slots"].get(field)
+    original_candidates = set(info.get("candidates") or [])
     _record_confirmation(session, field, canonical, method="user_confirm")
     if (
         raw
         and normalize_key(str(raw)) != normalize_key(canonical)
+        and len(original_candidates) <= 1
         and _should_learn_confirmation(field, str(raw), canonical)
     ):
         session.setdefault("pending_writebacks", []).append(

@@ -6,6 +6,9 @@ from unittest.mock import MagicMock, Mock, patch
 from chatbot.conversation.actions import handle_continuation
 from chatbot.conversation.completion import _complete_from_session
 from chatbot.conversation.resolution import (
+    _matching_organizations,
+    _ordered_unconfirmed_fields,
+    _scoped_candidates,
     _should_learn_confirmation,
     provide_current_slot,
     resolve_next_slot,
@@ -90,6 +93,56 @@ class SlotPlanTests(unittest.TestCase):
         self.assertEqual(required_slots("access"), ACCESS_SLOTS)
         self.assertEqual(required_slots("lives"), LIVES_SLOTS)
         self.assertEqual(required_slots("joint"), JOINT_SLOTS)
+
+    def test_explicit_ambiguity_precedes_missing_fields(self) -> None:
+        session = _session(
+            values={
+                "regimen": "Tregzi",
+                "indication": "CLL",
+            }
+        )
+        session["slots"]["organization"] = "Blue plan"
+        session["link_info"]["organization"] = {
+            "raw": "Blue plan",
+            "status": "ambiguous",
+        }
+
+        self.assertEqual(
+            _ordered_unconfirmed_fields(session),
+            [
+                "organization",
+                "book",
+                "coverage",
+                "population",
+                "line",
+            ],
+        )
+
+    def test_multiple_explicit_ambiguities_keep_normal_slot_order(self) -> None:
+        session = _session()
+        for field, raw in (
+            ("organization", "Blue plan"),
+            ("book", "Medicaid"),
+            ("regimen", "Tregzzi"),
+        ):
+            session["slots"][field] = raw
+            session["link_info"][field] = {
+                "raw": raw,
+                "status": "ambiguous",
+            }
+
+        self.assertEqual(
+            _ordered_unconfirmed_fields(session),
+            [
+                "regimen",
+                "book",
+                "organization",
+                "indication",
+                "coverage",
+                "population",
+                "line",
+            ],
+        )
 
 
 class PrimitiveTests(unittest.TestCase):
@@ -399,6 +452,28 @@ class FacetedProgressionTests(unittest.TestCase):
             ],
         )
 
+    def test_multi_candidate_confirmation_is_not_learned(self) -> None:
+        session = _session()
+        session["slots"]["book"] = "Medicaid"
+        session["link_info"]["book"] = {
+            "raw": "Medicaid",
+            "status": "ambiguous",
+            "candidates": ["FFS Medicaid", "Managed Medicaid"],
+        }
+        session["current_slot"] = "book"
+        with patch(
+            "chatbot.conversation.resolution._distinct_for_session",
+            side_effect=_field_options(
+                {
+                    "book": ["FFS Medicaid", "Managed Medicaid"],
+                    "regimen": ["Tregzi", "Brukinsa"],
+                }
+            ),
+        ):
+            provide_current_slot(session, "Managed Medicaid")
+
+        self.assertEqual(session["pending_writebacks"], [])
+
     def test_ambiguous_organization_confirmation_is_not_learned(self) -> None:
         organizations = [
             "BCBS Massachusetts",
@@ -425,6 +500,125 @@ class FacetedProgressionTests(unittest.TestCase):
                     "BCBS Massachusetts",
                 )
             )
+
+    def test_ambiguous_organization_candidates_include_name_matches(self) -> None:
+        self.assertEqual(
+            _matching_organizations(
+                "Capital",
+                [
+                    "Aetna",
+                    "Capital BlueCross",
+                    "Capital District Physicians' Health Plan",
+                ],
+            ),
+            [
+                "Capital BlueCross",
+                "Capital District Physicians' Health Plan",
+            ],
+        )
+        self.assertEqual(
+            _matching_organizations(
+                "BCBS",
+                [
+                    "Aetna",
+                    "BlueCross BlueShield Alabama",
+                    "FEP Blue",
+                    "Florida Blue",
+                    "Lifetime Healthcare (Excellus BCBS)",
+                    "Premera BlueCross",
+                ],
+            ),
+            [
+                "BlueCross BlueShield Alabama",
+                "FEP Blue",
+                "Florida Blue",
+                "Lifetime Healthcare (Excellus BCBS)",
+                "Premera BlueCross",
+            ],
+        )
+        self.assertEqual(
+            _matching_organizations(
+                "Community Health",
+                [
+                    "Aetna",
+                    "Community Health Choice (TX)",
+                    "Fallon Community Health",
+                ],
+            ),
+            [
+                "Community Health Choice (TX)",
+                "Fallon Community Health",
+            ],
+        )
+        self.assertEqual(
+            _matching_organizations(
+                "Fallon Community Health",
+                [
+                    "Community Health Choice (TX)",
+                    "Fallon Community Health",
+                ],
+            ),
+            ["Fallon Community Health"],
+        )
+        self.assertEqual(
+            _matching_organizations(
+                "Blue plan",
+                [
+                    "Aetna",
+                    "BlueCross BlueShield Alabama",
+                    "FEP Blue",
+                    "Florida Blue",
+                    "Lifetime Healthcare (Excellus BCBS)",
+                    "Premera BlueCross",
+                ],
+            ),
+            [
+                "BlueCross BlueShield Alabama",
+                "FEP Blue",
+                "Florida Blue",
+                "Lifetime Healthcare (Excellus BCBS)",
+                "Premera BlueCross",
+            ],
+        )
+        blue_organizations = [
+            "BlueCross BlueShield Alabama",
+            "FEP Blue",
+            "Florida Blue",
+            "Lifetime Healthcare (Excellus BCBS)",
+            "Premera BlueCross",
+        ]
+        for alias in ("Blue Cross", "Blue Shield", "the Blues"):
+            self.assertEqual(
+                _matching_organizations(alias, blue_organizations),
+                blue_organizations,
+            )
+
+    def test_organization_candidates_are_limited_to_valid_combinations(self) -> None:
+        session = _session()
+        session["slots"]["organization"] = "Community Health"
+        session["link_info"]["organization"] = {
+            "raw": "Community Health",
+            "status": "ambiguous",
+            "candidates": [],
+        }
+        with patch(
+            "chatbot.conversation.resolution._distinct_for_session",
+            return_value=[
+                "Aetna",
+                "Community Health Choice (TX)",
+                "Fallon Community Health",
+            ],
+        ):
+            candidates = _scoped_candidates(
+                session,
+                "organization",
+                ["Aetna", "Fallon Community Health"],
+            )
+
+        self.assertEqual(
+            candidates,
+            ["Fallon Community Health"],
+        )
 
     def test_unique_organization_shorthand_is_learned(self) -> None:
         organizations = [
