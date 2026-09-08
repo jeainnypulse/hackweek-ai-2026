@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Typography } from '@pulse-analytics/pulse-design-system'
+import {
+  Colors,
+  Typography,
+} from '@pulse-analytics/pulse-design-system'
 
 function answerWithoutCitation(answer = '') {
   return answer
@@ -45,6 +48,7 @@ export default function AnswerView({ result, onFeedback }) {
       <Typography
         variant="Body50.Regular"
         className="pulse-answer-copy"
+        style={{ color: Colors.Black }}
       >
         {visibleAnswer}
       </Typography>
