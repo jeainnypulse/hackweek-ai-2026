@@ -263,6 +263,66 @@ class SynthesizeAnswerTests(unittest.TestCase):
         )
         self.assertEqual(invoke.call_args.kwargs["max_tokens"], 220)
 
+    def test_access_answer_omits_score_from_context(self):
+        record = {
+            "collection": "access",
+            "organization": "Aetna",
+            "regimen": "Tregzi",
+            "accessData": {"access": "Restricted", "score": 30},
+        }
+        with patch(
+            "chatbot.synthesis.synthesis.invoke_claude",
+            return_value="Tregzi is Restricted at Aetna.",
+        ) as invoke:
+            answer, _ = synthesis.synthesize_answer(
+                "What is Tregzi access at Aetna?",
+                [record],
+                intent="access",
+            )
+
+        self.assertEqual(answer, "Tregzi is Restricted at Aetna.")
+        prompt = invoke.call_args.args[0]
+        self.assertNotIn('"score"', prompt)
+        self.assertIn("without its score", prompt)
+
+    def test_joint_context_omits_access_score_but_keeps_lives_count(self):
+        records = [
+            {
+                "collection": "access",
+                "organization": "Aetna",
+                "regimen": "Tregzi",
+                "accessData": {"access": "Restricted", "score": 30},
+            },
+            {
+                "collection": "lives",
+                "organization": "Aetna",
+                "book": "Medicare",
+                "coverage": "Pharmacy",
+                "lives": 1000,
+            },
+        ]
+        with patch(
+            "chatbot.synthesis.synthesis.invoke_claude",
+            return_value=(
+                "Tregzi is Restricted at Aetna. "
+                "Aetna has 1,000 Medicare pharmacy lives."
+            ),
+        ) as invoke:
+            answer, _ = synthesis.synthesize_answer(
+                "What is access and lives?",
+                records,
+                intent="joint",
+            )
+
+        self.assertEqual(
+            answer,
+            "Tregzi is Restricted at Aetna. "
+            "Aetna has 1,000 Medicare pharmacy lives.",
+        )
+        prompt = invoke.call_args.args[0]
+        self.assertNotIn('"score"', prompt)
+        self.assertIn('"lives": 1000', prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

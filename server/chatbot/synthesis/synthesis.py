@@ -13,9 +13,9 @@ Rules:
 
 Format (strict):
 - One to two sentences only. No markdown, no headers, no bullets, no bold, no horizontal rules.
-- State the access level and score directly. Nothing else.
+- State the access level directly. Do not mention the score or any numeric access score.
 - End with source in parentheses.
-- Example: Brukinsa has a Step Edit at UnitedHealth Group for CLL under Medicare with a score of 21. (Source: UnitedHealth Group, Brukinsa, CLL, Medicare)"""
+- Example: Brukinsa has a Step Edit at UnitedHealth Group for CLL under Medicare. (Source: UnitedHealth Group, Brukinsa, CLL, Medicare)"""
 
 LIVES_SYSTEM_PROMPT = """You are a payer data analyst assistant for a pharmaceutical market access consulting firm.
 
@@ -45,7 +45,7 @@ Rules:
 
 Format (strict):
 - Two sentences only. No markdown, no headers, no bullets, no bold, no horizontal rules.
-- Sentence 1: access level and score for the drug at the payer.
+- Sentence 1: access level for the drug at the payer. Do not mention the score or any numeric access score.
 - Sentence 2: lives count (and percent if present) with payer, book, coverage, and geography.
 - End each sentence with its source in parentheses.
 - Example: Tregzi is Not Reviewed at Aetna for hematologic malignancies on Medicare. (Source: Aetna, Tregzi, Hematologic malignancies, Medicare) Aetna has 5,685,473 Medicare pharmacy lives nationally. (Source: Aetna, Medicare, Pharmacy, United States, DRG)"""
@@ -59,6 +59,18 @@ def clean_answer(text: str) -> str:
     text = re.sub(r"^[-*]\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _without_score_fields(value):
+    if isinstance(value, dict):
+        return {
+            key: _without_score_fields(child)
+            for key, child in value.items()
+            if not str(key).casefold().endswith("score")
+        }
+    if isinstance(value, list):
+        return [_without_score_fields(child) for child in value]
+    return value
 
 
 def _is_lives_record(record: dict) -> bool:
@@ -142,7 +154,8 @@ def synthesize_answer(
 
     context_parts = ["PAYER DATA RECORDS:"]
     for r in records:
-        context_parts.append(json.dumps(r, default=str))
+        synthesis_record = r if _is_lives_record(r) else _without_score_fields(r)
+        context_parts.append(json.dumps(synthesis_record, default=str))
 
     context = "\n".join(context_parts)
     canonical_context = json.dumps(confirmed_slots or {}, default=str)
@@ -155,7 +168,7 @@ Use the confirmed canonical slot values in the answer instead of aliases,
 misspellings, or unresolved names from the original question."""
     if joint:
         system = JOINT_SYSTEM_PROMPT
-        prompt = f"""Answer in two plain-text sentences only. No markdown. Access fact first, then lives fact.
+        prompt = f"""Answer in two plain-text sentences only. No markdown. Access fact first, then lives fact. Do not include the access score.
 
 {request_context}
 
@@ -173,7 +186,7 @@ Records:
         max_tokens = 150
     else:
         system = ACCESS_SYSTEM_PROMPT
-        prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the access level and score directly.
+        prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the access level without its score.
 
 {request_context}
 
