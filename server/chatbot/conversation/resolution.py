@@ -11,6 +11,7 @@ from chatbot.query_resolution.entity_linking import (
     normalize_key,
     territory_type_for_canonical,
 )
+from chatbot.query_resolution.linking import catalogs as catalog_store
 from chatbot.slot_extract.lives_extract import apply_lives_defaults
 
 
@@ -75,6 +76,29 @@ def _record_confirmation(
             session["linked"],
             territory_type_for_canonical(value),
         )
+
+
+def _should_learn_confirmation(
+    field: str,
+    raw: str,
+    canonical: str,
+) -> bool:
+    """Only learn organization shorthand when it identifies one global payer."""
+    if field != "organization":
+        return True
+
+    raw_key = normalize_key(raw).replace(" ", "")
+    if not raw_key:
+        return False
+    organizations = (
+        catalog_store.load_catalogs_from_db().get("organization") or []
+    )
+    matches = [
+        value
+        for value in organizations
+        if raw_key in normalize_key(str(value)).replace(" ", "")
+    ]
+    return len(matches) == 1 and matches[0] == canonical
 
 
 def _needs_input(
@@ -235,7 +259,11 @@ def provide_current_slot(session: dict, value: object) -> dict:
     info = session["link_info"].get(field) or {}
     raw = info.get("raw") or session["slots"].get(field)
     _record_confirmation(session, field, canonical, method="user_confirm")
-    if raw and normalize_key(str(raw)) != normalize_key(canonical):
+    if (
+        raw
+        and normalize_key(str(raw)) != normalize_key(canonical)
+        and _should_learn_confirmation(field, str(raw), canonical)
+    ):
         session.setdefault("pending_writebacks", []).append(
             {"dimension": field, "alias": str(raw), "canonical": canonical}
         )

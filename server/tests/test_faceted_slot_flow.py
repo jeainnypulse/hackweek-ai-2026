@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, Mock, patch
 
 from chatbot.conversation.actions import handle_continuation
 from chatbot.conversation.completion import _complete_from_session
-from chatbot.conversation.resolution import provide_current_slot, resolve_next_slot
+from chatbot.conversation.resolution import (
+    _should_learn_confirmation,
+    provide_current_slot,
+    resolve_next_slot,
+)
 from chatbot.conversation.slot_plan import (
     ACCESS_SLOTS,
     JOINT_SLOTS,
@@ -394,6 +398,51 @@ class FacetedProgressionTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_ambiguous_organization_confirmation_is_not_learned(self) -> None:
+        organizations = [
+            "BCBS Massachusetts",
+            "BCBS Michigan",
+            "Capital BlueCross",
+            "Capital Health Plan",
+            "Capital District Physicians' Health Plan",
+        ]
+        with patch(
+            "chatbot.conversation.resolution.catalog_store.load_catalogs_from_db",
+            return_value={"organization": organizations},
+        ):
+            self.assertFalse(
+                _should_learn_confirmation(
+                    "organization",
+                    "Capital",
+                    "Capital BlueCross",
+                )
+            )
+            self.assertFalse(
+                _should_learn_confirmation(
+                    "organization",
+                    "BCBS",
+                    "BCBS Massachusetts",
+                )
+            )
+
+    def test_unique_organization_shorthand_is_learned(self) -> None:
+        organizations = [
+            "Baylor Scott and White",
+            "Capital BlueCross",
+            "Capital Health Plan",
+        ]
+        with patch(
+            "chatbot.conversation.resolution.catalog_store.load_catalogs_from_db",
+            return_value={"organization": organizations},
+        ):
+            self.assertTrue(
+                _should_learn_confirmation(
+                    "organization",
+                    "Baylor",
+                    "Baylor Scott and White",
+                )
+            )
 
     def test_expired_session_and_non_provide_actions_are_rejected(self) -> None:
         expired = handle_continuation("expired", "provide", "Tregzi")
