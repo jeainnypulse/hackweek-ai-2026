@@ -10,6 +10,7 @@ from chatbot.slot_extract.lives_extract import (
     LIVES_DEFAULT_SOURCE,
     LIVES_DEFAULT_TERRITORY_NAME,
     LIVES_DEFAULT_TERRITORY_TYPE,
+    normalize_territory,
 )
 
 
@@ -64,6 +65,16 @@ def _lives_mongo_filter(
             query[field] = value
     if "source" not in query and "source" not in drop:
         query["source"] = LIVES_DEFAULT_SOURCE
+    if (
+        "territoryType" not in query
+        and "territoryType" not in drop
+        and query.get("territoryName")
+    ):
+        territory_type, territory_name = normalize_territory(
+            query["territoryName"]
+        )
+        query["territoryType"] = territory_type
+        query["territoryName"] = territory_name
     if "territoryType" not in query and "territoryType" not in drop:
         query["territoryType"] = LIVES_DEFAULT_TERRITORY_TYPE
     if "territoryName" not in query and "territoryName" not in drop:

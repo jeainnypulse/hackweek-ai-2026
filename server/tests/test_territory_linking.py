@@ -9,6 +9,7 @@ from chatbot.query_resolution.entity_linking import (
     resolve_cascade,
 )
 from chatbot.query_resolution.linking import config
+from chatbot.conversation.queries import _lives_mongo_filter
 from chatbot.conversation.resolution import resolve_next_slot
 from chatbot.slot_extract.lives_extract import (
     LIVES_DEFAULT_SOURCE,
@@ -239,6 +240,16 @@ class TerritoryLinkingTests(unittest.TestCase):
         self.assertEqual(
             normalize_territory("Atlantis"),
             ("National", "United States"),
+        )
+
+    def test_lives_filter_infers_state_type_from_territory_name(self) -> None:
+        self.assertEqual(
+            _lives_mongo_filter({"territoryName": "AK"}),
+            {
+                "territoryName": "AK",
+                "territoryType": "U.S. State",
+                "source": LIVES_DEFAULT_SOURCE,
+            },
         )
 
     def test_apply_lives_defaults_uses_linked_territory_and_coverage(self) -> None:
