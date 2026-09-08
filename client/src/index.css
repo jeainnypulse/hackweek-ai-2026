@@ -157,6 +157,7 @@ input {
   display: flex;
   flex-direction: column;
   padding: 24px;
+  overflow-y: hidden;
 }
 
 .pulse-welcome {
@@ -296,13 +297,18 @@ input {
 }
 
 .pulse-follow-up-composer {
+  flex-shrink: 0;
   width: 100%;
   margin-top: auto;
-  padding-top: 32px;
+  padding-top: 16px;
+  background: #fff;
 }
 
 .pulse-chat-transcript {
+  flex: 1;
+  min-height: 0;
   width: 100%;
+  overflow-y: auto;
 }
 
 .pulse-chat-transcript .pulse-conversation + .pulse-conversation {
@@ -317,7 +323,7 @@ input {
   box-sizing: border-box;
   width: 300px;
   max-width: 100%;
-  height: 56px;
+  min-height: 56px;
   margin-left: auto;
   padding: 10px 14px;
   border-radius: 12px 12px 3px 12px;

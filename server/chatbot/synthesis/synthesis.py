@@ -10,6 +10,8 @@ Answer questions about payer access data using ONLY the records provided. Never 
 Rules:
 - Only use information from the provided records.
 - If records are empty or insufficient, say so clearly. Do not guess.
+- Copy the value from accessData.access verbatim, preserving its exact wording and capitalization.
+- Never interpret, paraphrase, expand, or explain the access value.
 
 Format (strict):
 - One to two sentences only. No markdown, no headers, no bullets, no bold, no horizontal rules.
@@ -40,6 +42,8 @@ Answer a joint question with TWO separate facts for one payer: access status AND
 Rules:
 - Records tagged "collection": "access" are quality-of-access. Records tagged "collection": "lives" are enrollment.
 - Do not weight lives by access (do not say "lives with PA" unless both facts are stated separately).
+- Copy the value from accessData.access verbatim, preserving its exact wording and capitalization.
+- Never interpret, paraphrase, expand, or explain the access value.
 - lives is a count. livesPercent is a 0-1 fraction; report it as a percentage.
 - If one side has no records, say so and still report the other side. Do not guess.
 
@@ -168,7 +172,7 @@ Use the confirmed canonical slot values in the answer instead of aliases,
 misspellings, or unresolved names from the original question."""
     if joint:
         system = JOINT_SYSTEM_PROMPT
-        prompt = f"""Answer in two plain-text sentences only. No markdown. Access fact first, then lives fact. Do not include the access score.
+        prompt = f"""Answer in two plain-text sentences only. No markdown. Access fact first, then lives fact. Copy accessData.access verbatim without interpreting it. Do not include the access score.
 
 {request_context}
 
@@ -186,7 +190,7 @@ Records:
         max_tokens = 150
     else:
         system = ACCESS_SYSTEM_PROMPT
-        prompt = f"""Answer in one to two plain-text sentences only. No markdown. State the access level without its score.
+        prompt = f"""Answer in one to two plain-text sentences only. No markdown. State accessData.access verbatim without interpreting it or including its score.
 
 {request_context}
 

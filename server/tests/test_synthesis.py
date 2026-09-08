@@ -197,7 +197,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
         }
         with patch(
             "chatbot.synthesis.synthesis.invoke_claude",
-            return_value="# Tregzi is restricted.",
+            return_value="# Tregzi is Restricted.",
         ) as invoke:
             answer, citations = synthesis.synthesize_answer(
                 "Tregzi access?",
@@ -205,7 +205,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
                 intent="access",
             )
 
-        self.assertEqual(answer, "Tregzi is restricted.")
+        self.assertEqual(answer, "Tregzi is Restricted.")
         self.assertEqual(
             citations,
             [
@@ -216,6 +216,10 @@ class SynthesizeAnswerTests(unittest.TestCase):
         self.assertEqual(
             invoke.call_args.kwargs["system"],
             synthesis.ACCESS_SYSTEM_PROMPT,
+        )
+        self.assertIn(
+            "Copy the value from accessData.access verbatim",
+            invoke.call_args.kwargs["system"],
         )
         self.assertEqual(invoke.call_args.kwargs["max_tokens"], 150)
 
@@ -256,6 +260,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
         )
         prompt = invoke.call_args.args[0]
         self.assertIn("Access fact first, then lives fact", prompt)
+        self.assertIn("Copy accessData.access verbatim", prompt)
         self.assertIn('"organization": "Aetna"', prompt)
         self.assertEqual(
             invoke.call_args.kwargs["system"],
@@ -283,7 +288,7 @@ class SynthesizeAnswerTests(unittest.TestCase):
         self.assertEqual(answer, "Tregzi is Restricted at Aetna.")
         prompt = invoke.call_args.args[0]
         self.assertNotIn('"score"', prompt)
-        self.assertIn("without its score", prompt)
+        self.assertIn("verbatim without interpreting it", prompt)
 
     def test_joint_context_omits_access_score_but_keeps_lives_count(self):
         records = [
