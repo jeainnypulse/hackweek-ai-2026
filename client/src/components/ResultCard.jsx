@@ -29,7 +29,12 @@ export default function ResultCard({
       </div>
 
       {loading && !result ? (
-        <div className="pulse-response-row" role="status" aria-live="polite">
+        <div
+          className="pulse-response-row"
+          role="status"
+          aria-live="polite"
+          style={{ color: Colors.Black }}
+        >
           <PulseAiIcon className="pulse-response-icon" />
           <Typography variant="Body50.Regular">
             Searching Quality of Access records...
@@ -47,7 +52,10 @@ export default function ResultCard({
             onSubmit={onSubmitSlot}
             onStartOver={onStartOver}
           />
-          <div className="pulse-response-row pulse-response-row-answer">
+          <div
+            className="pulse-response-row pulse-response-row-answer"
+            style={{ color: Colors.Black }}
+          >
             <PulseAiIcon className="pulse-response-icon" />
             <AnswerView result={result} onFeedback={onFeedback} />
           </div>

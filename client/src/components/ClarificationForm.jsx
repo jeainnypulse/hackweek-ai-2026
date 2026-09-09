@@ -29,7 +29,10 @@ export default function ClarificationForm({
     <div className="pulse-slot-flow">
       {turns.map((turn, index) => (
         <div className="pulse-slot-turn" key={`${turn.slot}-${index}`}>
-          <div className="pulse-response-row pulse-slot-prompt">
+          <div
+            className="pulse-response-row pulse-slot-prompt"
+            style={{ color: Colors.Black }}
+          >
             <PulseAiIcon className="pulse-response-icon" />
             <Typography variant="Body50.Regular">
               {formatPrompt(turn.prompt, turn.slot)}
@@ -49,6 +52,7 @@ export default function ClarificationForm({
           className="pulse-response-row pulse-slot-current"
           role="status"
           aria-live="polite"
+          style={{ color: Colors.Black }}
         >
           <PulseAiIcon className="pulse-response-icon" />
           <Typography variant="Body50.Regular">Thinking...</Typography>
@@ -57,7 +61,10 @@ export default function ClarificationForm({
       )}
 
       {result.status === 'needs_input' && !loading && (
-        <div className="pulse-response-row pulse-slot-current">
+        <div
+          className="pulse-response-row pulse-slot-current"
+          style={{ color: Colors.Black }}
+        >
           <PulseAiIcon className="pulse-response-icon" />
           <div className="pulse-slot-control">
             <Typography variant="Body50.Regular">
